@@ -18,7 +18,7 @@
   #dorp, #winkel { background:rgba(16,38,59,.55); }
   .wrap { width:100%; max-width:460px; display:flex; flex-direction:column; min-height:0; flex:1; gap:8px; }
   .top { display:flex; align-items:center; gap:8px; }
-  h1 { margin:0; flex:1; color:#fff; font-size:26px; letter-spacing:1px; text-shadow:0 2px 0 #0008; }
+  h1 { margin:0; flex:1; color:#fff; font-size:22px; letter-spacing:1px; text-shadow:0 2px 0 #0008; }
   .res { display:flex; gap:6px; justify-content:center; flex-wrap:wrap; }
   .pill { background:var(--dark); color:#fff; border-radius:999px; padding:6px 12px; font-weight:700; font-size:15px; }
   button { font:inherit; border:0; border-radius:12px; font-weight:800; color:#fff; background:var(--go);
@@ -28,7 +28,11 @@
   button.gold { background:var(--accent); color:#3b2a00; }
   button.ghost { background:var(--dark); }
   button.gem { background:#3b5bdb; }
-  .top button { min-height:42px; }
+  .top button { min-height:42px; padding:6px 9px; font-size:14px; }
+  #raid { justify-content:flex-end; pointer-events:none; }
+  #raid .bar { pointer-events:auto; width:100%; max-width:460px; }
+  #raid .bar button { flex:1; font-size:17px; min-height:58px; }
+  .ok { color:#2b8a3e; font-weight:700; } .nok { color:#a15c00; }
 
   /* dorpskaart met bouwplaatsen */
   .map { position:relative; flex:1; min-height:230px; border-radius:18px; overflow:hidden; background:#2b7fc4; box-shadow:0 3px 0 #0004; }
@@ -42,6 +46,7 @@
   .plot .lv { position:absolute; right:-6px; bottom:-4px; background:var(--dark); color:#fff; font-size:11px; border-radius:999px; padding:3px 6px; }
   .plot .nm { position:absolute; left:50%; top:100%; transform:translateX(-50%); margin-top:4px; white-space:nowrap; font-size:11px; color:#fff;
     background:#0b1c2cb0; border-radius:6px; padding:1px 6px; }
+  .plot .tr { position:absolute; left:-8px; top:-8px; font-size:15px; background:#0b1c2cc0; border-radius:999px; padding:2px 4px; }
   .plot .bub { position:absolute; left:50%; top:-16px; transform:translateX(-50%); font-size:18px; animation:bob 1s infinite alternate; }
   @keyframes bob { to { margin-top:-5px; } }
   @media (prefers-reduced-motion: reduce) { .plot .bub { animation:none; } }
@@ -75,6 +80,7 @@
   <div class="wrap">
     <div class="top">
       <h1>VLOEDKLOK</h1>
+      <button class="ghost" data-act="leger" style="background:#a61e4d">⚔️ Leger</button>
       <button class="gem" data-act="shop">🛒 Winkel</button>
       <button class="ghost" data-act="mute" id="muteBtn" aria-label="Geluid"></button>
     </div>
@@ -98,6 +104,21 @@
   </div>
 </div>
 
+<div id="leger" class="screen" style="background:rgba(16,38,59,.55)">
+  <div class="wrap">
+    <div class="top"><h1>LEGER</h1><button class="ghost" data-act="home">✕ Dorp</button></div>
+    <div class="res" id="res3"></div>
+    <div class="list" id="armyList"></div>
+    <div class="bar">
+      <button class="sq ghost" data-act="rprev" aria-label="Vorig eiland">‹</button>
+      <button class="big" data-act="raid" id="raidBtn" style="background:#a61e4d"></button>
+      <button class="sq ghost" data-act="rnext" aria-label="Volgend eiland">›</button>
+    </div>
+  </div>
+</div>
+
+<div id="raid" class="screen"><div class="bar" id="raidBar"></div></div>
+
 <div id="eind" class="screen">
   <div class="box">
     <h2 id="eTitle"></h2>
@@ -115,13 +136,13 @@
 /* ===================== Opslag ===================== */
 const KEY = 'vloedklok.v1';
 const DEV = /[?&]dev=1/.test(location.search);
-const DEF = { gold:0, pearls:0, diamonds:0, max:1, sel:1, best:0, b:{inn:0,shop:0,dike:0,light:0,mine:0},
-  plots:[null,null,null,null,null,null], mineT:Date.now(), mute:false };
+const DEF = { gold:0, pearls:0, diamonds:0, max:1, sel:1, best:0, b:{inn:0,shop:0,dike:0,light:0,mine:0,bar:0},
+  army:{t:0,a:0,s:0}, raid:1, raidSel:1, plots:[null,null,null,null,null,null], mineT:Date.now(), mute:false };
 function loadSave() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
   const v = JSON.parse(JSON.stringify(DEF));
-  if (s && s.b) { Object.assign(v, s); v.b = Object.assign({}, DEF.b, s.b); v.plots = (s.plots || DEF.plots).slice(0, 6); while (v.plots.length < 6) v.plots.push(null); }
+  if (s && s.b) { Object.assign(v, s); v.b = Object.assign({}, DEF.b, s.b); v.army = Object.assign({}, DEF.army, s.army); v.plots = (s.plots || DEF.plots).slice(0, 6); while (v.plots.length < 6) v.plots.push(null); }
   for (const k in v.b) if (v.b[k] > 0 && !v.plots.includes(k)) { const i = v.plots.indexOf(null); if (i >= 0) v.plots[i] = k; } // oude saves een plek geven
   return v;
 }
@@ -132,12 +153,17 @@ function save() { try { localStorage.setItem(KEY, JSON.stringify(SV)); } catch (
 const MAGNET = [0, 70, 110, 150];
 // c = kosten per niveau: [goud, parels]
 const BLD = {
-  mine:  { n:'Goudmijn',   i:'⛏️', d:l => l ? `Delft ${l*8} goud/min (opslag ${l*240})` : 'Delft goud, ook als je weg bent', c:[[80,0],[250,1],[600,3],[1300,6]] },
-  dike:  { n:'Dijk',       i:'🧱', d:l => l ? `Vloed ${l*4}% trager, meer voorsprong` : 'Remt de vloed af', c:[[120,0],[300,1],[650,3],[1200,6]] },
-  light: { n:'Vuurtoren',  i:'🗼', d:l => l ? `Trekt munten aan (bereik ${MAGNET[l]})` : 'Trekt munten naar je toe', c:[[100,0],[350,2],[800,4]] },
-  inn:   { n:'Herberg',    i:'🏠', d:l => `${3+l} levens per expeditie`, c:[[150,0],[400,2],[900,5]] },
-  shop:  { n:'Werkplaats', i:'🥾', d:l => `${1+l}× springen in de lucht`, c:[[300,3],[800,8]] },
+  mine:  { n:'Goudmijn',   i:'⛏️', likes:'heuvel', bonus:'+25% goud', d:l => l ? `Delft ${l*8} goud/min (opslag ${l*240})` : 'Delft goud, ook als je weg bent', c:[[80,0],[250,1],[600,3],[1300,6]] },
+  bar:   { n:'Kazerne',    i:'🏰', likes:'centrum', bonus:'+2 wachters', d:l => l ? `Leger van ${CAP[l]} wachters${l >= 2 ? ', Slopers beschikbaar' : ' (Slopers vanaf niveau 2)'}` : 'Train wachters voor strooptochten', c:[[120,0],[350,2],[800,4],[1500,7]] },
+  dike:  { n:'Dijk',       i:'🧱', likes:'kust', bonus:'vloed 2% trager, +5 s strooptocht', d:l => l ? `Vloed ${l*4}% trager · strooptocht +${l*5} s` : 'Remt de vloed af, geeft strooptochten meer tijd', c:[[120,0],[300,1],[650,3],[1200,6]] },
+  light: { n:'Vuurtoren',  i:'🗼', likes:'kust', bonus:'+20 bereik, verder zicht', d:l => l ? `Trekt munten aan (bereik ${MAGNET[l]}) · verkent vijandige paden` : 'Trekt munten aan, verkent vijandige eilanden', c:[[100,0],[350,2],[800,4]] },
+  inn:   { n:'Herberg',    i:'🏠', likes:'centrum', bonus:'+1 leven', d:l => `${3+l} levens per expeditie · wachters +${l*15}% leven`, c:[[150,0],[400,2],[900,5]] },
+  shop:  { n:'Werkplaats', i:'🥾', likes:'heuvel', bonus:'wachters +10% schade', d:l => `${1+l}× springen in de lucht · wachters +${l*15}% schade`, c:[[300,3],[800,8]] },
 };
+const CAP = [0, 5, 8, 11, 14]; // legergrootte per Kazerne-niveau
+// Elke bouwplaats heeft terrein; een gebouw op zijn voorkeursterrein krijgt een bonus. Er is maar één heuvel.
+const TERR = ['kust', 'heuvel', 'kust', 'centrum', 'centrum', 'kust'], TICON = { kust:'🌊', heuvel:'⛰️', centrum:'🏘️' }, MOVE_COST = 30;
+const bonus = k => { const i = SV.plots.indexOf(k); return i >= 0 && TERR[i] === BLD[k].likes; };
 const PLOTS = [[20,24],[54,17],[81,36],[27,60],[63,57],[46,84]]; // posities in % op de kaart
 const MAPSVG = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
   <rect width="100" height="100" fill="#2b7fc4"/>
@@ -147,10 +173,11 @@ const MAPSVG = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidde
   <path d="M27 60 Q20 42 20 24 M63 57 Q56 72 46 84" fill="none" stroke="#e3c98a" stroke-width="3" stroke-linecap="round"/>
   <g fill="#3f8f3a"><circle cx="38" cy="34" r="4"/><circle cx="43" cy="38" r="3.4"/><circle cx="70" cy="76" r="3.6"/><circle cx="14" cy="44" r="3.2"/><circle cx="84" cy="54" r="3"/><circle cx="48" cy="45" r="3"/></g>
 </svg>`;
-let selPlot = null, shopMsg = '';
+let selPlot = null, moving = null, shopMsg = '';
 function mineStock() {
   const l = SV.b.mine; if (!l) return 0;
-  return Math.floor(Math.min(l*240, l*8*(Date.now()-SV.mineT)/60000));
+  const m = bonus('mine') ? 1.25 : 1;
+  return Math.floor(Math.min(l*240*m, l*8*m*(Date.now()-SV.mineT)/60000));
 }
 const $ = id => document.getElementById(id);
 const costTxt = c => `🪙${c[0]}${c[1] ? ' ⚪' + c[1] : ''}`;
@@ -161,22 +188,25 @@ function renderDorp() {
   let h = MAPSVG;
   PLOTS.forEach((p, i) => {
     const k = SV.plots[i], sel = selPlot === i ? ' sel' : '';
-    if (k) h += `<button class="plot built${sel}" data-act="plot" data-i="${i}" style="left:${p[0]}%;top:${p[1]}%" aria-label="${BLD[k].n}">${BLD[k].i}<span class="lv">${SV.b[k]}</span><span class="nm">${BLD[k].n}</span>${k === 'mine' && mineStock() > 0 ? '<span class="bub">🪙</span>' : ''}</button>`;
-    else h += `<button class="plot empty${sel}" data-act="plot" data-i="${i}" style="left:${p[0]}%;top:${p[1]}%" aria-label="Lege bouwplaats">＋</button>`;
+    if (k) h += `<button class="plot built${sel}" data-act="plot" data-i="${i}" style="left:${p[0]}%;top:${p[1]}%" aria-label="${BLD[k].n}">${BLD[k].i}<span class="tr">${TICON[TERR[i]]}</span><span class="lv">${SV.b[k]}${bonus(k) ? '★' : ''}</span><span class="nm">${BLD[k].n}</span>${k === 'mine' && mineStock() > 0 ? '<span class="bub">🪙</span>' : ''}</button>`;
+    else h += `<button class="plot empty${sel}" data-act="plot" data-i="${i}" style="left:${p[0]}%;top:${p[1]}%" aria-label="Lege bouwplaats, ${TERR[i]}">＋<span class="tr">${TICON[TERR[i]]}</span></button>`;
   });
   $('map').innerHTML = h;
   let s = '';
-  if (selPlot === null) s = `<div class="hint">Tik op een bouwplaats <b>＋</b> om te bouwen, of op een gebouw om het te verbeteren.</div>`;
+  if (moving !== null) s = `<div class="hint">Tik op de plek waar de <b>${BLD[SV.plots[moving]].n}</b> heen moet. Staat daar al iets, dan ruilen ze. Kost 🪙${MOVE_COST}.</div><button class="ghost" data-act="movecancel">Annuleer</button>`;
+  else if (selPlot === null) s = `<div class="hint">Tik op een bouwplaats <b>＋</b> om te bouwen, of op een gebouw om het te verbeteren.<br>Terrein telt: 🌊 kust · ⛰️ heuvel · 🏘️ centrum.</div>`;
   else if (SV.plots[selPlot]) {
     const k = SV.plots[selPlot], b = BLD[k], l = SV.b[k], c = b.c[l];
     s = `<div class="row"><div class="ico">${b.i}</div><div class="txt"><b>${b.n}</b> · niveau ${l}<small>${b.d(l)}</small>${c ? `<small>Volgend niveau: ${b.d(l+1)}</small>` : ''}</div>` +
         (c ? `<button class="${canPay(c) ? '' : 'off'}" data-act="up" data-k="${k}">Upgrade<br>${costTxt(c)}</button>` : `<button class="off" disabled>MAX</button>`) + `</div>`;
-    if (k === 'mine') s += `<button class="gold" data-act="collect">Goud innen: 🪙 ${mineStock()}</button>`;
+    s += `<small class="${bonus(k) ? 'ok' : 'nok'}">${TICON[b.likes]} Voorkeur ${b.likes}: ${b.bonus} — ${bonus(k) ? 'actief ★' : 'niet actief, staat op ' + TERR[selPlot]}</small>`;
+    s += `<div class="row">${k === 'mine' ? `<button class="gold" data-act="collect" style="flex:1">Innen 🪙 ${mineStock()}</button>` : ''}${k === 'bar' ? `<button data-act="leger" style="flex:1;background:#a61e4d">⚔️ Leger</button>` : ''}<button class="ghost" data-act="move" style="flex:1">Verplaats 🪙${MOVE_COST}</button></div>`;
   } else {
     const free = Object.keys(BLD).filter(k => !SV.plots.includes(k));
     if (!free.length) s = `<div class="hint">Alle gebouwen staan al. Deze plek blijft vrij.</div>`;
-    for (const k of free) { const b = BLD[k], c = b.c[0];
-      s += `<div class="row"><div class="ico">${b.i}</div><div class="txt"><b>${b.n}</b><small>${b.d(0)}</small></div><button class="${canPay(c) ? '' : 'off'}" data-act="build" data-k="${k}">Bouw hier<br>${costTxt(c)}</button></div>`; }
+    if (free.length) s = `<small>Deze plek is ${TICON[TERR[selPlot]]} <b>${TERR[selPlot]}</b>. ★ = dit gebouw krijgt hier zijn bonus.</small>`;
+    for (const k of free) { const b = BLD[k], c = b.c[0], fit = TERR[selPlot] === b.likes;
+      s += `<div class="row"><div class="ico">${b.i}</div><div class="txt"><b>${b.n}${fit ? ' ★' : ''}</b><small>${b.d(0)}</small><small class="${fit ? 'ok' : ''}">${TICON[b.likes]} ${b.likes}: ${b.bonus}</small></div><button class="${canPay(c) ? '' : 'off'}" data-act="build" data-k="${k}">Bouw hier<br>${costTxt(c)}</button></div>`; }
   }
   $('sheet').innerHTML = s;
   $('playBtn').textContent = '▶ Expeditie ' + SV.sel;
@@ -184,7 +214,7 @@ function renderDorp() {
   $('muteBtn').textContent = SV.mute ? '🔇' : '🔊';
 }
 function show(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === id); }
-function goDorp() { G.mode = 'dorp'; renderDorp(); show('dorp'); }
+function goDorp() { G.mode = 'dorp'; moving = null; renderDorp(); show('dorp'); }
 
 /* ===================== Winkel & diamanten ===================== */
 // Betaaladapter. ECHTE betalingen zijn NIET gekoppeld: vervang PAY.buy door Play Billing / StoreKit / Stripe
@@ -209,7 +239,29 @@ document.addEventListener('click', e => {
   const t = e.target.closest('[data-act]'); if (!t) return;
   audioInit();
   const a = t.dataset.act, k = t.dataset.k;
-  if (a === 'plot') { const i = +t.dataset.i; selPlot = selPlot === i ? null : i; renderDorp(); }
+  if (a === 'plot') {
+    const i = +t.dataset.i;
+    if (moving !== null) { // verplaatsen of ruilen
+      if (i !== moving && SV.gold >= MOVE_COST) { if (SV.b.mine) { SV.gold += mineStock(); SV.mineT = Date.now(); }
+        SV.gold -= MOVE_COST; [SV.plots[i], SV.plots[moving]] = [SV.plots[moving], SV.plots[i]]; selPlot = i; sfx('up'); save(); }
+      else if (i !== moving) sfx('no');
+      moving = null;
+    } else selPlot = selPlot === i ? null : i;
+    renderDorp();
+  }
+  else if (a === 'move') { if (SV.gold >= MOVE_COST) moving = selPlot; else sfx('no'); renderDorp(); }
+  else if (a === 'movecancel') { moving = null; renderDorp(); }
+  else if (a === 'leger') openLeger();
+  else if (a === 'train') {
+    const u = UT[k];
+    if (unitOk(k) && armySize() < armyCap() && SV.gold >= u.cost) { SV.gold -= u.cost; SV.army[k]++; sfx('coin'); save(); } else sfx('no');
+    renderLeger();
+  }
+  else if (a === 'rprev') { SV.raidSel = Math.max(1, SV.raidSel-1); renderLeger(); }
+  else if (a === 'rnext') { SV.raidSel = Math.min(SV.raid, SV.raidSel+1); renderLeger(); }
+  else if (a === 'raid') startRaid();
+  else if (a === 'rsel') { if (R.left[k] > 0) R.sel = k; renderRaidBar(); }
+  else if (a === 'rdone') endRaid();
   else if (a === 'build') {
     const c = BLD[k].c[0];
     if (selPlot !== null && !SV.plots[selPlot] && !SV.plots.includes(k) && canPay(c)) {
@@ -230,6 +282,7 @@ document.addEventListener('click', e => {
   else if (a === 'play') start(SV.sel);
   else if (a === 'endless') start(0);
   else if (a === 'home') goDorp();
+  else if (a === 'again' && G.mode === 'raidEnd') openLeger();
   else if (a === 'again') start(G.n === 0 ? 0 : G.mode === 'win' ? SV.sel : G.n);
   else if (a === 'revive') revive();
   else if (a === 'shop') { shopMsg = ''; G.mode = 'dorp'; renderShop(); show('winkel'); }
@@ -337,8 +390,8 @@ function start(n, seed) {
   Object.assign(G, {
     L, blocks:L.blocks, plats:L.plats, coins:L.coins, foes:L.foes, gates:L.gates, flagX:L.flagX, flagY:L.flagY,
     mode:'play', n, t:0, gold:0, pearls:0, parts:[], pops:[], revived:false, banked:null, pruneT:0,
-    hearts:3 + SV.b.inn, maxAir:1 + SV.b.shop, magnet:MAGNET[SV.b.light],
-    speed:n ? 220 + 5*Math.min(n, 16) : 220, fK:.93 - .04*SV.b.dike, fMax:400 + 50*SV.b.dike,
+    hearts:3 + SV.b.inn + (bonus('inn') ? 1 : 0), maxAir:1 + SV.b.shop, magnet:MAGNET[SV.b.light] + (bonus('light') ? 20 : 0),
+    speed:n ? 220 + 5*Math.min(n, 16) : 220, fK:.93 - .04*SV.b.dike - (bonus('dike') ? .02 : 0), fMax:400 + 50*SV.b.dike,
     p:{ x:0, y:500 - PH, vy:0, ground:true, coy:0, buf:0, air:0, inv:0, stall:0, duck:false, duckT:0, jT:-9, jAir:false, gateStall:false },
   });
   G.floodX = -G.fMax; G.p.air = G.maxAir;
@@ -477,6 +530,148 @@ function step() {
   if (p.x > G.flagX) return end(true);
   for (let i = G.parts.length-1; i >= 0; i--) { const q = G.parts[i]; q.l -= dt; q.vy += 900*dt; q.x += q.vx*dt; q.y += q.vy*dt; if (q.l <= 0) G.parts.splice(i, 1); }
   for (let i = G.pops.length-1; i >= 0; i--) { const q = G.pops[i]; q.l -= dt; q.y -= 45*dt; if (q.l <= 0) G.pops.splice(i, 1); }
+}
+
+
+/* ===================== Leger & strooptochten ===================== */
+// Wachters train je in de Kazerne. Op een strooptocht zet je ze één voor één in op drie paden;
+// elk pad eindigt bij een krabbennest. Volgorde en verdeling bepalen de uitkomst. Overlevenden keren terug.
+const UT = {
+  t:{ n:'Dijkwerker',   i:'🛡️', hp:140, dps:10, rng:22,  sp:34, cost:20, tip:'Taai. Vangt klappen op. Kan niet bij meeuwen.' },
+  a:{ n:'Boogschutter', i:'🏹', hp:40,  dps:13, rng:100, sp:34, cost:30, air:1, tip:'Schiet van afstand, ook op meeuwen. Breekbaar.' },
+  s:{ n:'Sloper',       i:'🔨', hp:60,  dps:55, rng:22,  sp:44, cost:40, only:1, tip:'Negeert dieren, sloopt torens en nesten razendsnel.' },
+};
+const DT = {
+  k:{ n:'Krab',  i:'🦀', hp:115, dps:17, rng:22,  sp:30, ag:130 },
+  m:{ n:'Meeuw', i:'🐦', hp:42,  dps:17, rng:30,  sp:60, ag:170, fly:1 },
+  w:{ n:'Schelpentoren', i:'🐚', hp:280, dps:28, rng:145, st:1 },
+  n:{ n:'Nest',  i:'🥚', hp:340, st:1 },
+};
+const UK = ['t', 'a', 's'];
+const armyCap = () => CAP[SV.b.bar] + (bonus('bar') ? 2 : 0);
+const armySize = () => SV.army.t + SV.army.a + SV.army.s;
+const unitOk = k => SV.b.bar >= (k === 's' ? 2 : 1);
+const hpMul = () => 1 + .15*SV.b.inn, dmgMul = () => 1 + .15*SV.b.shop + (bonus('shop') ? .1 : 0);
+const raidTime = () => 45 + 5*SV.b.dike + (bonus('dike') ? 5 : 0);
+const sight = () => 180 + 110*(SV.b.light + (bonus('light') ? 1 : 0));
+function genRaid(lv) { // deterministisch per eiland
+  // vast aantal verdedigers per eiland, ongelijk verdeeld: er is altijd een zwak en een zwaar pad
+  const r = rng(lv*104729 + 7), lanes = [], B = Math.min(15, Math.round(2.6 + lv*1.1)), cnt = [1, 1, 1];
+  for (let i = 3; i < B; i++) { let j = Math.floor(r()*r()*3); if (cnt[j] >= 6) j = cnt.indexOf(Math.min(...cnt)); cnt[j]++; }
+  const rot = Math.floor(r()*3);
+  for (let i = 0; i < 3; i++) {
+    const n = cnt[(i + rot) % 3], ds = [];
+    for (let j = 0; j < n; j++) { const q = r(), k = lv >= 3 && q < .22 ? 'w' : lv >= 2 && q < .5 ? 'm' : 'k'; ds.push({ k, d:k === 'w' ? 380 + r()*60 : 190 + r()*250 }); }
+    lanes.push(ds.sort((a, b) => a.d - b.d));
+  }
+  return { lv, lanes, gold:60 + 25*lv, pearls:1 + Math.floor(lv/3) };
+}
+function renderLeger() {
+  $('res3').innerHTML = resHtml();
+  let h = '';
+  if (!SV.b.bar) h = `<div class="note">Je hebt nog geen Kazerne. Bouw er een op de dorpskaart om wachters te trainen en op strooptocht te gaan.</div>`;
+  else {
+    h += `<div class="card"><b>Wachters: ${armySize()} / ${armyCap()}</b><small style="display:block;color:#4b5b6b">Herberg: +${Math.round((hpMul()-1)*100)}% leven · Werkplaats: +${Math.round((dmgMul()-1)*100)}% schade · Dijk: ${raidTime()} s tot de vloed</small></div>`;
+    for (const k of UK) { const u = UT[k], ok = unitOk(k), can = ok && armySize() < armyCap() && SV.gold >= u.cost;
+      h += `<div class="card row"><div class="ico">${u.i}</div><div class="txt"><b>${u.n}</b> × ${SV.army[k]}<small>${ok ? u.tip : 'Vanaf Kazerne niveau 2.'}</small></div><button class="${can ? '' : 'off'}" data-act="train" data-k="${k}">Train<br>🪙${u.cost}</button></div>`; }
+    const g = genRaid(SV.raidSel), vis = sight();
+    h += `<h3>Verkenning eiland ${SV.raidSel}</h3><div class="card">` + g.lanes.map((ds, i) => `<div><b>Pad ${i+1}:</b> ${ds.map(d => d.d <= vis ? DT[d.k].i : '❓').join(' ')} → 🥚</div>`).join('') +
+      `<small style="display:block;color:#4b5b6b;margin-top:4px">Buit: 🪙 ${g.gold} per nest, ⚪ ${g.pearls} bij 3 nesten.${vis < 470 ? ' ❓ = buiten zicht; een hogere Vuurtoren ziet verder.' : ''}</small></div>`;
+  }
+  $('armyList').innerHTML = h;
+  $('raidBtn').textContent = '⚔️ Strooptocht ' + SV.raidSel;
+  $('raidBtn').className = 'big' + (SV.b.bar && armySize() ? '' : ' off');
+}
+function openLeger() { G.mode = 'dorp'; moving = null; renderLeger(); show('leger'); }
+
+let R = null;
+function mk(side, k, lane, d) { const def = side ? DT[k] : UT[k], hp = def.hp*(side ? 1 : R.hm), e = { side, k, lane, d, hp, max:hp, def, home:d }; R.ents.push(e); return e; }
+function startRaid() {
+  if (!SV.b.bar || !armySize()) { sfx('no'); return; }
+  const g = genRaid(SV.raidSel);
+  R = { lv:g.lv, gold:g.gold, pearls:g.pearls, t:0, time:raidTime(), left:Object.assign({}, SV.army), sel:null, ents:[], nest:[], stars:0, lost:0, sent:0, sight:sight(), hm:hpMul(), dm:dmgMul() };
+  g.lanes.forEach((ds, i) => { R.nest.push(mk(1, 'n', i, 500)); for (const d of ds) mk(1, d.k, i, d.d); });
+  R.sel = UK.find(k => R.left[k] > 0); G.mode = 'raid'; renderRaidBar(); show('raid');
+}
+function renderRaidBar() {
+  let h = '';
+  for (const k of UK) if (unitOk(k)) h += `<button class="${R.sel === k ? 'gold' : R.left[k] ? 'ghost' : 'off'}" data-act="rsel" data-k="${k}">${UT[k].i} × ${R.left[k]}</button>`;
+  $('raidBar').innerHTML = h + `<button class="off" data-act="rdone" style="flex:.8;font-size:14px">Terug-<br>trekken</button>`;
+}
+function deploy(lane) {
+  if (G.mode !== 'raid') return;
+  const k = R.sel;
+  if (!k || R.left[k] <= 0 || R.nest[lane].hp <= 0) { sfx('no'); return; }
+  R.left[k]--; SV.army[k]--; R.sent++; mk(0, k, lane, R.sent*3 % 10); sfx('jump');
+  if (!R.left[k]) R.sel = UK.find(k => R.left[k] > 0) || null;
+  renderRaidBar();
+}
+function raidStep(dt) {
+  R.t += dt; const E = R.ents;
+  for (const e of E) {
+    if (e.hp <= 0 || e.k === 'n' || R.nest[e.lane].hp <= 0) continue;
+    let tg = null, bd = 1e9;
+    for (const o of E) {
+      if (o.hp <= 0 || o.side === e.side || o.lane !== e.lane) continue;
+      if (e.side === 0 && ((e.def.only && !o.def.st) || (o.def.fly && !e.def.air))) continue;
+      const dd = Math.abs(o.d - e.d); if (dd < bd) { bd = dd; tg = o; }
+    }
+    if (tg && bd <= e.def.rng) {
+      tg.hp -= e.def.dps*(e.side ? 1 : R.dm)*dt; e.hit = R.t;
+      if (tg.hp <= 0) { if (tg.k === 'n') { R.stars++; sfx('up'); } else if (tg.side) sfx('stomp'); else { R.lost++; sfx('hurt'); } }
+    } else if (e.side === 0) e.d = Math.min(e.d + e.def.sp*dt, 495);
+    else if (!e.def.st) {
+      if (tg && bd <= e.def.ag) e.d += Math.sign(tg.d - e.d)*e.def.sp*dt;
+      else if (Math.abs(e.home - e.d) > 2) e.d += Math.sign(e.home - e.d)*e.def.sp*.5*dt;
+    }
+  }
+  const alive = E.some(e => e.side === 0 && e.hp > 0 && R.nest[e.lane].hp > 0), stock = R.left.t + R.left.a + R.left.s;
+  if (R.stars === 3 || R.t >= R.time || (!alive && !stock)) endRaid();
+}
+function endRaid() {
+  if (G.mode !== 'raid') return;
+  G.mode = 'raidEnd';
+  for (const e of R.ents) if (e.side === 0 && e.hp > 0) SV.army[e.k]++; // overlevenden keren terug
+  const s = R.stars, gold = s*R.gold, pearls = s === 3 ? R.pearls : 0; let extra = '';
+  SV.gold += gold; SV.pearls += pearls;
+  if (s >= 2 && R.lv === SV.raid) { SV.raid++; SV.raidSel = SV.raid; SV.diamonds += 2; extra = '<br>💎 + 2 · volgend eiland ontdekt'; }
+  else if (s < 2 && R.lv === SV.raid) extra = '<br>Vernietig 2 nesten om het volgende eiland te ontdekken.';
+  save(); if (s) sfx('bell');
+  $('eTitle').textContent = s ? '⚔️ ' + '⭐'.repeat(s) + '☆'.repeat(3 - s) : '🌊 Teruggedreven';
+  $('eText').innerHTML = `${s} van 3 nesten vernield${R.t >= R.time ? ' voordat de vloed kwam' : ''}.<br>🪙 ${gold} &nbsp; ⚪ ${pearls}${extra}<br>Verloren wachters: ${R.lost}`;
+  $('revBtn').hidden = true; $('revBtn').style.display = 'none'; $('eBtn').textContent = '⚔️ Leger'; show('eind');
+}
+function drawRaid() {
+  const yt = 150, yb = H - 135, Y = d => yb - d/500*(yb - yt);
+  ctx.fillStyle = '#2b7fc4'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#f1dca7'; rr(8, 84, W - 16, H - 84 - 96, 28); ctx.fill();
+  ctx.fillStyle = '#6dbb4a'; rr(18, 94, W - 36, H - 84 - 116, 22); ctx.fill();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let i = 0; i < 3; i++) {
+    const x = W*(i + .5)/3, done = R.nest[i].hp <= 0;
+    ctx.fillStyle = done ? '#bfe3a8' : '#e3c98a'; rr(x - 26, yt - 26, 52, yb - yt + 52, 26); ctx.fill();
+    let vis = R.sight; for (const e of R.ents) if (e.side === 0 && e.lane === i && e.hp > 0) vis = Math.max(vis, e.d + 130);
+    R.nest[i].vis = vis;
+    if (!done && vis < 465) { ctx.fillStyle = 'rgba(190,205,220,.85)'; rr(x - 30, Y(478), 60, Y(vis) - Y(478), 16); ctx.fill(); ctx.fillStyle = '#10263b'; ctx.font = 'bold 20px system-ui'; ctx.fillText('?', x, (Y(478) + Y(vis))/2); }
+    if (!done && !R.sent) { ctx.fillStyle = '#10263b99'; ctx.font = 'bold 13px system-ui'; ctx.fillText('tik hier', x, yb + 4); }
+  }
+  let n = 0;
+  for (const e of R.ents) {
+    n++; if (e.hp <= 0) { if (e.k === 'n') { ctx.font = '26px system-ui'; ctx.fillText('⭐', W*(e.lane + .5)/3, Y(500)); } continue; }
+    if (R.nest[e.lane].hp <= 0 && e.side) continue;
+    if (e.side && e.k !== 'n' && e.d > R.nest[e.lane].vis) continue; // nog niet verkend
+    const x = W*(e.lane + .5)/3 + (e.k === 'n' ? 0 : (n % 3 - 1)*13), y = Y(e.d) - (e.def.fly ? 16 + Math.sin(R.t*6 + n)*4 : 0) + (e.hit && R.t - e.hit < .1 ? Math.sin(R.t*40)*2 : 0);
+    ctx.font = (e.k === 'n' ? 30 : 23) + 'px system-ui'; ctx.fillText(e.def.i, x, y);
+    if (e.hp < e.max) { ctx.fillStyle = '#0b1c2c'; ctx.fillRect(x - 13, y - 19, 26, 4); ctx.fillStyle = e.side ? '#e03131' : '#2f9e44'; ctx.fillRect(x - 13, y - 19, 26*Math.max(0, e.hp/e.max), 4); }
+  }
+  // de vloedklok: als het water komt is de strooptocht voorbij
+  const k = clamp(R.t/R.time, 0, 1);
+  ctx.fillStyle = '#0b1c2ccc'; rr(12, 14, W - 24, 58, 14); ctx.fill();
+  ctx.fillStyle = '#16324f'; rr(22, 48, W - 44, 12, 6); ctx.fill();
+  ctx.fillStyle = k > .75 ? '#e03131' : '#4dabf7'; rr(22, 48, Math.max(6, (W - 44)*k), 12, 6); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'left'; ctx.fillText('Eiland ' + R.lv + '   ' + '⭐'.repeat(R.stars), 22, 31);
+  ctx.textAlign = 'right'; ctx.fillText('🌊 vloed over ' + Math.max(0, Math.ceil(R.time - R.t)) + ' s', W - 22, 31);
+  if (!R.sent) { ctx.textAlign = 'center'; ctx.fillStyle = '#0b1c2ccc'; rr(W/2 - 165, 100, 330, 34, 10); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = 'bold 14px system-ui'; ctx.fillText('Kies een wachter onderaan en tik op een pad', W/2, 117); }
 }
 
 /* ===================== Tekenen ===================== */
@@ -643,6 +838,7 @@ function drawHud() {
 }
 function draw() {
   ctx.setTransform(S, 0, 0, S, 0, 0);
+  if (G.mode === 'raid' || G.mode === 'raidEnd') return drawRaid();
   if (G.mode === 'dorp') { drawBg(G.bgX); ctx.fillStyle = '#2b7fc4'; ctx.fillRect(0, OY + 520, W, H); return; }
   const cam = G.p.x - W*.25;
   drawBg(cam); drawWorld(cam); drawHud();
@@ -653,12 +849,13 @@ let last = 0, acc = 0;
 function frame(t) {
   const dt = Math.min(.05, (t - last)/1000 || 0); last = t;
   if (G.mode === 'play') { acc += dt; while (acc >= STEP && G.mode === 'play') { step(); acc -= STEP; } }
+  else if (G.mode === 'raid') { acc += dt; while (acc >= 1/60 && G.mode === 'raid') { raidStep(1/60); acc -= 1/60; } }
   else { acc = 0; G.t += dt; G.bgX += dt*25; }
   draw(); requestAnimationFrame(frame);
 }
 // Eén duim: tik = springen, vasthouden = hoger, omlaag vegen (en vasthouden) = bukken.
 let pid = null, py0 = 0;
-cv.addEventListener('pointerdown', e => { e.preventDefault(); audioInit(); pid = e.pointerId; py0 = e.clientY; press(); });
+cv.addEventListener('pointerdown', e => { e.preventDefault(); audioInit(); if (G.mode === 'raid') return deploy(clamp(Math.floor(e.clientX/innerWidth*3), 0, 2)); pid = e.pointerId; py0 = e.clientY; press(); });
 addEventListener('pointermove', e => { if (e.pointerId === pid && e.clientY - py0 > 22) duckOn(); });
 function up(e) { if (e.pointerId !== pid) return; pid = null; duckOff(); release(); }
 addEventListener('pointerup', up); addEventListener('pointercancel', up);
@@ -670,7 +867,7 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp') release(); else if (e.code === 'ArrowDown' || e.code === 'KeyS') duckOff(); });
 addEventListener('contextmenu', e => e.preventDefault());
 
-window.VK = { G, get SV() { return SV; }, start, step, press, release, duckOn, duckOff, genLevel };
+window.VK = { G, get SV() { return SV; }, start, step, press, release, duckOn, duckOff, genLevel, genRaid, startRaid, deploy, raidStep, endRaid, get R() { return R; } };
 goDorp(); requestAnimationFrame(frame);
 </script>
 </body>
