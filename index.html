@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#16324f">
-<title>Vloedklok</title>
+<title>Castra</title>
 <style>
   :root { --ink:#10263b; --panel:#fdf6e3; --accent:#f2a900; --go:#2f9e44; --no:#9aa5b1; --dark:#0b1c2c; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -15,7 +15,7 @@
   .screen { position:fixed; inset:0; display:none; flex-direction:column; align-items:center;
     padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom)); }
   .screen.on { display:flex; }
-  #dorp, #winkel { background:rgba(16,38,59,.55); }
+  #winkel { background:rgba(16,38,59,.6); }
   .wrap { width:100%; max-width:460px; display:flex; flex-direction:column; min-height:0; flex:1; gap:8px; }
   .top { display:flex; align-items:center; gap:8px; }
   h1 { margin:0; flex:1; color:#fff; font-size:22px; letter-spacing:1px; text-shadow:0 2px 0 #0008; }
@@ -38,6 +38,21 @@
 
   /* dorpskaart met bouwplaatsen */
   .map { position:relative; flex:1; min-height:310px; border-radius:18px; overflow:hidden; background:#2b7fc4; box-shadow:0 3px 0 #0004; }
+  .has3d .map { background:none; box-shadow:none; overflow:visible; }
+  .has3d .map svg { display:none; }
+  .has3d .plot.built { background:none; border:0; box-shadow:none; font-size:0; width:70px; height:70px; }
+  .has3d .plot.sel { outline:0; }
+  .has3d .plot.empty { width:44px; height:44px; font-size:22px; background:#0b1c2c66; border-width:2px; box-shadow:none; }
+  .has3d .plot .lv { right:auto; left:50%; bottom:-8px; transform:translateX(-50%); font-size:12px; white-space:nowrap; }
+  .has3d .plot .nm { margin-top:12px; display:none; }
+  .has3d .plot.sel .nm { display:block; z-index:2; }
+  .has3d .plot.built .tr { display:none; }
+  .has3d .plot.empty .tr { left:auto; top:auto; right:-12px; bottom:-10px; font-size:11px; }
+  #raidHud { pointer-events:none; width:100%; max-width:460px; margin-bottom:auto; background:#0b1c2ccc; color:#fff; border-radius:14px; padding:8px 12px; font-weight:700; font-size:15px; }
+  #raidHud .r { display:flex; justify-content:space-between; gap:8px; }
+  #raidHud .pb { height:10px; border-radius:5px; background:#16324f; margin-top:6px; overflow:hidden; }
+  #raidHud .pb i { display:block; height:100%; width:0; background:#e0a13a; }
+  #rhH { font-weight:400; font-size:13px; margin-top:6px; text-align:center; }
   .map svg { position:absolute; inset:0; width:100%; height:100%; }
   .plot { position:absolute; transform:translate(-50%,-50%); width:58px; height:58px; min-height:0; padding:0; border-radius:50%;
     font-size:30px; line-height:1; box-shadow:0 4px 0 #0004; }
@@ -76,12 +91,13 @@
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<canvas id="gl"></canvas>
+<canvas id="c" style="display:none"></canvas>
 
 <div id="dorp" class="screen">
   <div class="wrap">
     <div class="top">
-      <h1>VLOEDKLOK</h1>
+      <h1>CASTRA</h1>
       <button class="ghost" data-act="verd">🛡️ Verdediging</button>
       <button class="gem" data-act="shop" aria-label="Winkel">🛒</button>
       <button class="ghost" data-act="mute" id="muteBtn" aria-label="Geluid"></button>
@@ -111,7 +127,7 @@
     <div class="res" id="res3"></div>
     <div class="list" id="armyList"></div>
     <div class="bar">
-      <button class="ghost" data-act="rnext" style="font-size:14px">↻ Ander<br>dorp</button>
+      <button class="ghost" data-act="rnext" style="font-size:14px">↻ Andere<br>stad</button>
       <button class="big" data-act="raid" id="raidBtn" style="background:#a61e4d"></button>
     </div>
   </div>
@@ -125,7 +141,7 @@
   </div>
 </div>
 
-<div id="raid" class="screen"><div class="bar" id="raidBar"></div></div>
+<div id="raid" class="screen"><div id="raidHud"><div class="r"><span id="rhN"></span><span id="rhT"></span></div><div class="pb"><i id="rhB"></i></div><div id="rhH">Kies een soldaat onderaan en tik op een weg</div></div><div class="bar" id="raidBar"></div></div>
 
 <div id="eind" class="screen">
   <div class="box">
@@ -139,6 +155,7 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 'use strict';
 /* ===================== Opslag ===================== */
@@ -158,46 +175,46 @@ let SV = loadSave();
 function save() { try { localStorage.setItem(KEY, JSON.stringify(SV)); } catch (e) {} }
 
 /* ===================== Dorp: gebouwen op bouwplaatsen ===================== */
-const MAGNET = [0, 70, 110, 150];
-// c = kosten per niveau: [goud, parels]
+// Elk gebouw heeft 20 niveaus. Kosten, bouwtijd en effect groeien per niveau; het uiterlijk verandert bij niveau 5, 10 en 15.
+const MAXL = 20, tierOf = l => l < 5 ? 0 : l < 10 ? 1 : l < 15 ? 2 : 3, TIERN = ['hout', 'steen', 'groot steen', 'marmer'];
+const r50 = v => v < 1000 ? Math.round(v/10)*10 : Math.round(v/50)*50;
+const gcap = l => r50(800*Math.pow(1.42, l)), mineRate = l => Math.round(8*Math.pow(1.3, l - 1)), magnetOf = l => l ? Math.min(150, 30 + 12*l) : 0;
 const BLD = {
-  hall:  { n:'Stadhuis',   i:'🏛️', likes:'centrum', bonus:'10% kortere bouwtijd', d:l => `Andere gebouwen kunnen tot niveau ${l}`, c:[[0,0],[400,1],[1200,4],[3000,8]] },
-  bank:  { n:'Bank',       i:'🏦', likes:'centrum', bonus:'+25% opslag', d:l => `Goudopslag ${GCAP[l]}`, c:[[100,0],[400,1],[1000,3]] },
-  arch:  { n:'Boogschutterskamp', i:'🎯', likes:'heuvel', bonus:'boogschutters +10% schade', d:l => l ? `Train Boogschutters · +${2*l} legerplekken${l > 1 ? ` · +${(l-1)*10}% schade` : ''}` : 'Train Boogschutters, vergroot je leger', c:[[150,0],[400,2],[900,4]] },
-  mine:  { n:'Goudmijn',   i:'⛏️', likes:'heuvel', bonus:'+25% goud', d:l => l ? `Delft ${l*8} goud/min (opslag ${l*240})` : 'Delft goud, ook als je weg bent', c:[[80,0],[250,1],[600,3],[1300,6]] },
-  bar:   { n:'Kazerne',    i:'🏰', likes:'centrum', bonus:'+2 wachters', d:l => l ? `Leger van ${CAP[l]} wachters${l >= 2 ? ', Slopers beschikbaar' : ' (Slopers vanaf niveau 2)'}` : 'Train wachters voor strooptochten', c:[[120,0],[350,2],[800,4],[1500,7]] },
-  dike:  { n:'Muur',       i:'🧱', likes:'kust', bonus:'+1 verdedigingspunt, vloed 2% trager', d:l => l ? `${4 + 2*l} verdedigingspunten${l >= 2 ? ', torens' : l >= 1 ? ', meeuwen' : ''} · vloed ${l*4}% trager · aanval +${l*5} s` : 'Meer verdedigers voor je dorp, remt de vloed af', c:[[120,0],[300,1],[650,3],[1200,6]] },
-  light: { n:'Vuurtoren',  i:'🗼', likes:'kust', bonus:'+20 bereik, verder zicht', d:l => l ? `Trekt munten aan (bereik ${MAGNET[l]}) · verkent vijandige paden` : 'Trekt munten aan, verkent vijandige eilanden', c:[[100,0],[350,2],[800,4]] },
-  inn:   { n:'Herberg',    i:'🏠', likes:'centrum', bonus:'+1 leven', d:l => `${3+l} levens per expeditie · wachters +${l*15}% leven`, c:[[150,0],[400,2],[900,5]] },
-  shop:  { n:'Werkplaats', i:'🥾', likes:'heuvel', bonus:'wachters +10% schade', d:l => `${1+l}× springen in de lucht · wachters +${l*15}% schade`, c:[[300,3],[800,8]] },
+  hall:  { n:'Stadhuis',   i:'🏛️', likes:'centrum', bonus:'10% kortere bouwtijd', base:280, pf:.8, d:l => `Andere gebouwen kunnen tot niveau ${l}` },
+  bank:  { n:'Bank',       i:'💰', likes:'centrum', bonus:'+25% opslag', base:100, pf:.5, d:l => `Goudopslag ${gcap(l)}` },
+  mine:  { n:'Goudmijn',   i:'⛏️', likes:'heuvel', bonus:'+25% goud', base:80, pf:.5, d:l => l ? `Delft ${mineRate(l)} goud/min (opslag ${mineRate(l)*45})` : 'Delft goud, ook als je weg bent' },
+  bar:   { n:'Kazerne',    i:'⚔️', likes:'centrum', bonus:'+2 legerplekken', base:120, pf:.6, d:l => l ? `Leger van ${4 + l} soldaten${l >= 3 ? ' · Stormrammen' : ' · Stormrammen vanaf niveau 3'}` : 'Train Legionairs voor je aanvallen' },
+  arch:  { n:'Boogschutterskamp', i:'🏹', likes:'heuvel', bonus:'boogschutters +10% schade', base:150, pf:.6, d:l => l ? `Train Boogschutters · +${l} legerplekken · +${3*l}% schade` : 'Train Boogschutters, vergroot je leger' },
+  dike:  { n:'Muur',       i:'🧱', likes:'rand', bonus:'+1 verdedigingspunt', base:120, pf:.6, d:l => l ? `${4 + l} verdedigingspunten · verdedigers ${4*l}% sterker${l >= 4 ? '' : l >= 2 ? ' · ballista vanaf niveau 4' : ' · adelaars vanaf niveau 2'}` : 'Meer en sterkere verdedigers voor je stad' },
+  light: { n:'Wachttoren', i:'🔥', likes:'rand', bonus:'ziet verder', base:100, pf:.5, d:l => l ? `Verkent vijandige wegen (zicht ${Math.min(100, Math.round((180 + 40*l)/4.7))}%)` : 'Laat vooraf zien hoe een vijand verdedigt' },
+  inn:   { n:'Taverne',    i:'🍷', likes:'centrum', bonus:'+1 leven op veldtocht', base:150, pf:.6, d:l => `Soldaten +${4*l}% leven · ${3 + Math.floor(l/4)} levens op veldtocht` },
+  shop:  { n:'Smederij',   i:'⚒️', likes:'heuvel', bonus:'soldaten +10% schade', base:200, pf:.7, d:l => `Soldaten +${4*l}% schade · ${1 + (l >= 5) + (l >= 12)}× springen in de lucht` },
 };
-const CAP = [0, 5, 8, 11, 14]; // legergrootte per Kazerne-niveau
-const GCAP = [800, 2000, 4000, 8000]; // goudopslag per Bank-niveau
-const goldCap = () => Math.round(GCAP[SV.b.bank]*(bonus('bank') ? 1.25 : 1));
+// Kosten [goud, parels] om van niveau l naar l+1 te gaan; null als het maximum bereikt is.
+function cost(k, l) { const b = BLD[k]; return l >= MAXL ? null : [r50(b.base*Math.pow(1.45, l)), l < 1 ? 0 : Math.ceil(l*b.pf)]; }
+const goldCap = () => Math.round(gcap(SV.b.bank)*(bonus('bank') ? 1.25 : 1));
 // Goud erbij, begrensd door de opslag. Geeft terug hoeveel er echt bij kwam.
 function addGold(n) { const g0 = SV.gold; SV.gold = Math.max(g0, Math.min(goldCap(), g0 + n)); return SV.gold - g0; }
 // Vereisten: niets mag hoger dan het Stadhuis; het Stadhuis en de Muur vragen zelf andere gebouwen.
-const HALLREQ = { 2:{ mine:1, bank:1 }, 3:{ mine:2, bank:2, bar:2 }, 4:{ mine:3, bank:3, dike:3 } };
-const EXREQ = { dike:{ 3:{ bank:2, mine:2 }, 4:{ bank:3, mine:3 } } };
 function missing(k, L) {
-  const r = k === 'hall' ? Object.assign({}, HALLREQ[L]) : Object.assign(L > SV.b.hall ? { hall:L } : {}, (EXREQ[k] || {})[L]);
+  const r = k === 'hall' ? Object.assign({ mine:L - 1, bank:L - 1 }, L >= 4 ? { dike:L - 2 } : {}) : Object.assign(L > SV.b.hall ? { hall:L } : {}, k === 'dike' && L >= 3 ? { bank:L - 1, mine:L - 1 } : {});
   return Object.keys(r).filter(q => SV.b[q] < r[q]).map(q => `${BLD[q].n} niveau ${r[q]}`);
 }
 // Bouwtijd in seconden: elk niveau duurt fors langer. Eén bouwer: één klus tegelijk.
-const buildSecs = (k, L) => Math.round([15, 90, 600, 2400][L - 1]*(k === 'hall' ? 2 : 1)*(bonus('hall') ? .9 : 1));
+const buildSecs = (k, L) => Math.round(Math.min(28800, 15*Math.pow(1.55, L - 1))*(k === 'hall' ? 2 : 1)*(bonus('hall') ? .9 : 1));
 const fmtT = t => t < 60 ? Math.ceil(t) + ' s' : t < 3600 ? Math.ceil(t/60) + ' min' : Math.floor(t/3600) + ' u ' + Math.round(t % 3600/60) + ' min';
 const jobLeft = () => SV.job ? Math.max(0, (SV.job.end - Date.now())/1000) : 0;
 const skipCost = () => Math.max(1, Math.ceil(jobLeft()/120));
 function finishJob() { const k = SV.job.k; if (k === 'mine') { addGold(mineStock()); SV.mineT = Date.now(); } SV.b[k]++; SV.job = null; save(); }
 function tickJob() { if (SV.job && Date.now() >= SV.job.end) { finishJob(); sfx('up'); return true; } return false; }
 function startJob(k, plot) {
-  const L = SV.b[k] + 1, c = BLD[k].c[L - 1];
+  const L = SV.b[k] + 1, c = cost(k, L - 1);
   if (SV.job || !c || !canPay(c) || missing(k, L).length) { sfx('no'); return; }
   SV.gold -= c[0]; SV.pearls -= c[1]; if (plot !== undefined) SV.plots[plot] = k;
   SV.job = { k, end:Date.now() + buildSecs(k, L)*1000 }; sfx('coin'); save();
 }
 // Elke bouwplaats heeft terrein; een gebouw op zijn voorkeursterrein krijgt een bonus. Er is maar één heuvel.
-const TERR = ['kust', 'heuvel', 'kust', 'centrum', 'centrum', 'kust', 'centrum', 'kust', 'heuvel'], TICON = { kust:'🌊', heuvel:'⛰️', centrum:'🏘️' }, MOVE_COST = 30;
+const TERR = ['rand', 'heuvel', 'rand', 'centrum', 'centrum', 'rand', 'centrum', 'rand', 'heuvel'], TICON = { rand:'🧱', heuvel:'⛰️', centrum:'🏛️' }, MOVE_COST = 30;
 const bonus = k => { const i = SV.plots.indexOf(k); return i >= 0 && SV.b[k] > 0 && TERR[i] === BLD[k].likes; };
 const PLOTS = [[20,21],[50,17],[80,22],[23,50],[77,50],[50,82],[50,49],[79,78],[21,78]]; // posities in % op de kaart
 const MAPSVG = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -210,8 +227,8 @@ const MAPSVG = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidde
 let selPlot = null, moving = null, shopMsg = '';
 function mineStock() {
   const l = SV.b.mine; if (!l) return 0;
-  const m = bonus('mine') ? 1.25 : 1;
-  return Math.floor(Math.min(l*240*m, l*8*m*(Date.now()-SV.mineT)/60000));
+  const r = mineRate(l)*(bonus('mine') ? 1.25 : 1);
+  return Math.floor(Math.min(r*45, r*(Date.now()-SV.mineT)/60000));
 }
 const $ = id => document.getElementById(id);
 const costTxt = c => `🪙${c[0]}${c[1] ? ' ⚪' + c[1] : ''}`;
@@ -228,9 +245,9 @@ function renderDorp() {
   $('map').innerHTML = h;
   let s = '';
   if (moving !== null) s = `<div class="hint">Tik op de plek waar de <b>${BLD[SV.plots[moving]].n}</b> heen moet. Staat daar al iets, dan ruilen ze. Kost 🪙${MOVE_COST}.</div><button class="ghost" data-act="movecancel">Annuleer</button>`;
-  else if (selPlot === null) s = `<div class="hint">Tik op een bouwplaats <b>＋</b> om te bouwen, of op een gebouw om het te verbeteren. Goud verdien je met expedities en aanvallen.<br>Terrein telt: 🌊 kust · ⛰️ heuvel · 🏘️ centrum.</div>`;
+  else if (selPlot === null) s = `<div class="hint">Tik op een bouwplaats <b>＋</b> om te bouwen, of op een gebouw om het te verbeteren. Goud verdien je met aanvallen, je Goudmijn en veldtochten.<br>Terrein telt: 🧱 rand · ⛰️ heuvel · 🏛️ centrum. Uiterlijk verandert op niveau 5, 10 en 15.</div>`;
   else if (SV.plots[selPlot]) {
-    const k = SV.plots[selPlot], b = BLD[k], l = SV.b[k], c = b.c[l], busy = SV.job && SV.job.k === k, miss = c ? missing(k, l + 1) : [];
+    const k = SV.plots[selPlot], b = BLD[k], l = SV.b[k], c = cost(k, l), busy = SV.job && SV.job.k === k, miss = c ? missing(k, l + 1) : [];
     let btn;
     if (busy) btn = `<button class="${SV.diamonds >= skipCost() ? 'gem' : 'off'}" data-act="skip">Nu klaar<br>💎 <span data-skip>${skipCost()}</span></button>`;
     else if (!c) btn = `<button class="off" disabled>MAX</button>`;
@@ -244,17 +261,18 @@ function renderDorp() {
     const free = Object.keys(BLD).filter(k => !SV.plots.includes(k));
     if (!free.length) s = `<div class="hint">Alle gebouwen staan al. Deze plek blijft vrij.</div>`;
     if (free.length) s = `<small>Deze plek is ${TICON[TERR[selPlot]]} <b>${TERR[selPlot]}</b>. ★ = dit gebouw krijgt hier zijn bonus.</small>`;
-    for (const k of free) { const b = BLD[k], c = b.c[0], fit = TERR[selPlot] === b.likes, miss = missing(k, 1);
+    for (const k of free) { const b = BLD[k], c = cost(k, 0), fit = TERR[selPlot] === b.likes, miss = missing(k, 1);
       s += `<div class="row"><div class="ico">${b.i}</div><div class="txt"><b>${b.n}${fit ? ' ★' : ''}</b><small>${b.d(0)}</small><small class="${fit ? 'ok' : ''}">${TICON[b.likes]} ${b.likes}: ${b.bonus}</small></div><button class="${canPay(c) && !SV.job && !miss.length ? '' : 'off'}" data-act="build" data-k="${k}">Bouw hier<br>${costTxt(c)}<br>⏱ ${fmtT(buildSecs(k, 1))}</button></div>`; }
     if (free.length && SV.job) s += `<small class="nok">🔨 De bouwer is bezig met ${BLD[SV.job.k].n}.</small>`;
   }
   $('sheet').innerHTML = s;
-  $('playBtn').innerHTML = '🏃 Expeditie<br>' + SV.sel;
+  placePlots();
+  $('playBtn').innerHTML = '🏃 Veldtocht<br>' + SV.sel;
   $('endBtn').innerHTML = '∞ Oneindig' + (SV.best ? `<br>${SV.best} m` : '');
   $('muteBtn').textContent = SV.mute ? '🔇' : '🔊';
 }
-function show(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === id); }
-function goDorp() { G.mode = 'dorp'; moving = null; SV.sel = SV.max; renderDorp(); show('dorp'); }
+function show(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === id); cv.style.display = GL.ok && id !== 'none' && !(id === 'eind' && (G.mode === 'win' || G.mode === 'lose')) ? 'none' : 'block'; }
+function goDorp() { G.mode = 'dorp'; moving = null; SV.sel = SV.max; show('dorp'); renderDorp(); }
 
 /* ===================== Winkel & diamanten ===================== */
 // Betaaladapter. ECHTE betalingen zijn NIET gekoppeld: vervang PAY.buy door Play Billing / StoreKit / Stripe
@@ -269,8 +287,8 @@ function renderShop() {
   $('res2').innerHTML = resHtml();
   let h = `<h3>Besteed diamanten</h3>`;
   for (const d of DEALS) h += `<div class="card row"><div class="ico">${d.i}</div><div class="txt"><b>${d.n}</b><small>${d.d}</small></div><button class="${SV.diamonds >= d.cost ? 'gem' : 'off'}" data-act="spend" data-id="${d.id}">💎 ${d.cost}</button></div>`;
-  h += `<div class="card row"><div class="ico">💖</div><div class="txt"><b>Tweede kans</b><small>Na een verloren expeditie verdergaan. Eén keer per expeditie, te kiezen op het eindscherm.</small></div><button class="off" disabled>💎 ${REVIVE}</button></div>`;
-  h += `<h3>Diamanten kopen</h3><div class="note">${DEV ? 'TESTMODUS: aankopen worden gesimuleerd, er wordt niets betaald.' : 'Betalen met echt geld is nog niet actief. Je verdient 💎 1 voor elke expeditie die je voor het eerst haalt.'}${shopMsg ? '<br><b>' + shopMsg + '</b>' : ''}</div>`;
+  h += `<div class="card row"><div class="ico">💖</div><div class="txt"><b>Tweede kans</b><small>Na een verloren veldtocht verdergaan. Eén keer per veldtocht, te kiezen op het eindscherm.</small></div><button class="off" disabled>💎 ${REVIVE}</button></div>`;
+  h += `<h3>Diamanten kopen</h3><div class="note">${DEV ? 'TESTMODUS: aankopen worden gesimuleerd, er wordt niets betaald.' : 'Betalen met echt geld is nog niet actief. Je verdient 💎 met volledige overwinningen en nieuwe veldtochten.'}${shopMsg ? '<br><b>' + shopMsg + '</b>' : ''}</div>`;
   for (const p of PACKS) h += `<div class="card row"><div class="ico">💎</div><div class="txt"><b>${p.n}</b><small>${p.q} diamanten</small></div><button class="gold" data-act="buy" data-id="${p.id}">${p.price}</button></div>`;
   $('shopList').innerHTML = h;
 }
@@ -294,7 +312,7 @@ document.addEventListener('click', e => {
   else if (a === 'leger') openLeger();
   else if (a === 'train') {
     const u = UT[k];
-    if (unitOk(k) && armySize() < armyCap() && SV.gold >= u.cost) { SV.gold -= u.cost; SV.army[k]++; sfx('coin'); save(); } else sfx('no');
+    if (unitOk(k) && armySize() < armyCap() && SV.gold >= ucost(k)) { SV.gold -= ucost(k); SV.army[k]++; sfx('coin'); save(); } else sfx('no');
     renderLeger();
   }
   else if (a === 'rnext') { tIdx++; renderLeger(); }
@@ -426,8 +444,8 @@ function start(n, seed) {
   Object.assign(G, {
     L, blocks:L.blocks, plats:L.plats, coins:L.coins, foes:L.foes, gates:L.gates, flagX:L.flagX, flagY:L.flagY,
     mode:'play', n, t:0, gold:0, pearls:0, parts:[], pops:[], revived:false, banked:null, pruneT:0,
-    hearts:3 + SV.b.inn + (bonus('inn') ? 1 : 0), maxAir:1 + SV.b.shop, magnet:MAGNET[SV.b.light] + (bonus('light') ? 20 : 0),
-    speed:n ? 220 + 5*Math.min(n, 16) : 220, fK:.93 - .04*SV.b.dike - (bonus('dike') ? .02 : 0), fMax:400 + 50*SV.b.dike,
+    hearts:3 + Math.floor(SV.b.inn/4) + (bonus('inn') ? 1 : 0), maxAir:1 + (SV.b.shop >= 5) + (SV.b.shop >= 12), magnet:magnetOf(SV.b.light), cv:Math.ceil(Math.pow(1.3, SV.b.hall - 1)),
+    speed:n ? 220 + 5*Math.min(n, 16) : 220, fK:.93 - .008*SV.b.dike, fMax:400 + 12*SV.b.dike,
     p:{ x:0, y:500 - PH, vy:0, ground:true, coy:0, buf:0, air:0, inv:0, stall:0, duck:false, duckT:0, jT:-9, jAir:false, gateStall:false },
   });
   G.floodX = -G.fMax; G.p.air = G.maxAir;
@@ -464,21 +482,21 @@ function end(win, why) {
   G.mode = win ? 'win' : 'lose';
   let txt;
   if (win) {
-    const bonus = 20 + 5*G.n, first = G.n === SV.max;
+    const bonus = (20 + 5*G.n)*G.cv, first = G.n === SV.max;
     addGold(G.gold + bonus); SV.pearls += G.pearls + (first ? 1 : 0);
     if (first) { SV.max++; SV.diamonds++; } SV.sel = Math.min(SV.max, G.n + 1);
     sfx('bell');
-    txt = `Het dorp is gewaarschuwd!<br>🪙 ${G.gold} + ${bonus} bonus &nbsp; ⚪ ${G.pearls}${first ? ' + 1 &nbsp; 💎 + 1 (eerste keer)' : ''}`;
-    $('eTitle').textContent = '🔔 Klok geluid!'; $('eBtn').textContent = '▶ Expeditie ' + SV.sel;
+    txt = `Het fort is gewaarschuwd: de Vesuvius is uitgebarsten!<br>🪙 ${G.gold} + ${bonus} bonus &nbsp; ⚪ ${G.pearls}${first ? ' + 1 &nbsp; 💎 + 1 (eerste keer)' : ''}`;
+    $('eTitle').textContent = '🏛️ Fort bereikt!'; $('eBtn').textContent = '▶ Veldtocht ' + SV.sel;
   } else if (G.n === 0) { // oneindig: alles wat je pakte is van jou
     const m = meters(), rec = m > SV.best; if (rec) SV.best = m;
     G.banked = { gold:addGold(G.gold), pearls:G.pearls }; SV.pearls += G.pearls;
     txt = `${why}<br><b>${m} m</b>${rec ? ' — nieuw record!' : ` (record ${SV.best} m)`}<br>🪙 ${G.gold} &nbsp; ⚪ ${G.pearls}`;
-    $('eTitle').textContent = '🌊 Einde van de tocht'; $('eBtn').textContent = '↻ Opnieuw';
+    $('eTitle').textContent = '🌋 Einde van de tocht'; $('eBtn').textContent = '↻ Opnieuw';
   } else {
     const keep = Math.floor(G.gold/2); G.banked = { gold:addGold(keep), pearls:0 };
     txt = `${why}<br>Je redt de helft van je buit: 🪙 ${keep}. Parels zijn verloren.`;
-    $('eTitle').textContent = '🌊 Verzwolgen'; $('eBtn').textContent = '↻ Opnieuw';
+    $('eTitle').textContent = '🌋 Ingehaald'; $('eBtn').textContent = '↻ Opnieuw';
   }
   const rb = $('revBtn'), canRev = !win && !G.revived;
   rb.hidden = !canRev; rb.style.display = canRev ? '' : 'none';
@@ -542,7 +560,7 @@ function step() {
     const c = G.coins[i], dx = p.x + PW/2 - c.x, dy = p.y + PH/2 - c.y, d2 = dx*dx + dy*dy;
     if (G.magnet && d2 < G.magnet*G.magnet) { const d = Math.sqrt(d2) || 1; c.x += dx/d*520*dt; c.y += dy/d*520*dt; }
     if (Math.abs(dx) < PW/2 + 10 && Math.abs(dy) < PH/2 + 10) {
-      if (c.t) { G.pearls++; sfx('pearl'); burst(c.x, c.y, '#ffd6ec', 10); } else { G.gold++; sfx('coin'); }
+      if (c.t) { G.pearls++; sfx('pearl'); burst(c.x, c.y, '#ffd6ec', 10); } else { G.gold += G.cv; sfx('coin'); }
       G.coins.splice(i, 1);
     }
   }
@@ -553,7 +571,7 @@ function step() {
     if (f.k === 1) f.y = f.by + Math.sin(G.t*3 + f.ph)*16;
     if (p.x + PW > f.x + 3 && p.x < f.x + f.w - 3 && p.y + PH > f.y + 2 && top < f.y + f.h) {
       if (p.vy > 0 && p.y + PH - p.vy*dt <= f.y + 12) {
-        const v = FOE_GOLD[f.k];
+        const v = FOE_GOLD[f.k]*G.cv;
         f.dead = true; p.vy = -460; p.air = G.maxAir; p.ground = false; G.gold += v;
         sfx('stomp'); burst(f.x + f.w/2, f.y, '#ffd43b', 14); pop(f.x + f.w/2, f.y - 8, '+' + v + ' 🪙');
       } else hurt();
@@ -562,7 +580,7 @@ function step() {
   if (G.mode !== 'play') return;
   // de vloed
   G.floodX = Math.max(G.floodX + G.speed*G.fK*dt, p.x - G.fMax);
-  if (G.floodX > p.x + PW*.6) return end(false, 'De vloed heeft je ingehaald.');
+  if (G.floodX > p.x + PW*.6) return end(false, 'De lava heeft je ingehaald.');
   if (p.x > G.flagX) return end(true);
   for (let i = G.parts.length-1; i >= 0; i--) { const q = G.parts[i]; q.l -= dt; q.vy += 900*dt; q.x += q.vx*dt; q.y += q.vy*dt; if (q.l <= 0) G.parts.splice(i, 1); }
   for (let i = G.pops.length-1; i >= 0; i--) { const q = G.pops[i]; q.l -= dt; q.y -= 45*dt; if (q.l <= 0) G.pops.splice(i, 1); }
@@ -573,25 +591,26 @@ function step() {
 // Wachters train je in de Kazerne. Op een strooptocht zet je ze één voor één in op drie paden;
 // elk pad eindigt bij een krabbennest. Volgorde en verdeling bepalen de uitkomst. Overlevenden keren terug.
 const UT = {
-  t:{ n:'Dijkwerker',   i:'🛡️', hp:140, dps:10, rng:22,  sp:34, cost:20, tip:'Taai. Vangt klappen op. Kan niet bij meeuwen.' },
-  a:{ n:'Boogschutter', i:'🏹', hp:40,  dps:13, rng:100, sp:34, cost:30, air:1, tip:'Schiet van afstand, ook op meeuwen. Breekbaar.' },
-  s:{ n:'Sloper',       i:'🔨', hp:60,  dps:55, rng:22,  sp:44, cost:40, only:1, tip:'Negeert dieren, sloopt torens en nesten razendsnel.' },
+  t:{ n:'Legionair',    i:'🛡️', hp:140, dps:10, rng:22,  sp:34, cost:20, tip:'Taai. Vangt klappen op. Kan niet bij adelaars.' },
+  a:{ n:'Boogschutter', i:'🏹', hp:40,  dps:13, rng:100, sp:34, cost:30, air:1, tip:'Schiet van afstand, ook op adelaars. Breekbaar.' },
+  s:{ n:'Stormram',     i:'🐏', hp:60,  dps:55, rng:22,  sp:44, cost:40, only:1, tip:'Negeert verdedigers, sloopt ballista en vaandels razendsnel.' },
 };
 const DT = {
-  k:{ n:'Krab',  i:'🦀', hp:115, dps:17, rng:22,  sp:30, ag:130 },
-  m:{ n:'Meeuw', i:'🐦', hp:42,  dps:17, rng:30,  sp:60, ag:170, fly:1 },
-  w:{ n:'Schelpentoren', i:'🐚', hp:280, dps:28, rng:145, st:1 },
-  n:{ n:'Nest',  i:'🥚', hp:340, st:1 },
+  k:{ n:'Wachter', i:'🗡️', hp:115, dps:17, rng:22,  sp:30, ag:130 },
+  m:{ n:'Adelaar', i:'🦅', hp:42,  dps:17, rng:30,  sp:60, ag:170, fly:1 },
+  w:{ n:'Ballista', i:'🗼', hp:280, dps:28, rng:145, st:1 },
+  n:{ n:'Vaandel', i:'🚩', hp:340, st:1 },
 };
 const UK = ['t', 'a', 's'];
-const armyCap = () => CAP[SV.b.bar] + 2*SV.b.arch + (bonus('bar') ? 2 : 0);
+const armyCap = () => (SV.b.bar ? 4 + SV.b.bar : 0) + SV.b.arch + (bonus('bar') ? 2 : 0);
+const ucost = k => r50(UT[k].cost*(1 + .3*(SV.b.hall - 1)));
 const armySize = () => SV.army.t + SV.army.a + SV.army.s;
-const unitOk = k => k === 'a' ? SV.b.arch >= 1 : SV.b.bar >= (k === 's' ? 2 : 1);
-const unitWhy = { t:'Bouw eerst een Kazerne.', a:'Bouw eerst een Boogschutterskamp.', s:'Vanaf Kazerne niveau 2.' };
-const archMul = () => 1 + .1*Math.max(0, SV.b.arch - 1) + (bonus('arch') ? .1 : 0);
-const hpMul = () => 1 + .15*SV.b.inn, dmgMul = () => 1 + .15*SV.b.shop + (bonus('shop') ? .1 : 0);
-const raidTime = () => 45 + 5*SV.b.dike + (bonus('dike') ? 5 : 0);
-const sight = () => 180 + 110*(SV.b.light + (bonus('light') ? 1 : 0));
+const unitOk = k => k === 'a' ? SV.b.arch >= 1 : SV.b.bar >= (k === 's' ? 3 : 1);
+const unitWhy = { t:'Bouw eerst een Kazerne.', a:'Bouw eerst een Boogschutterskamp.', s:'Vanaf Kazerne niveau 3.' };
+const archMul = () => 1 + .03*SV.b.arch + (bonus('arch') ? .1 : 0);
+const hpMul = () => 1 + .04*SV.b.inn, dmgMul = () => 1 + .04*SV.b.shop + (bonus('shop') ? .1 : 0);
+const raidTime = () => 45 + Math.min(20, SV.b.hall);
+const sight = () => 180 + 40*(SV.b.light + (bonus('light') ? 1 : 0));
 // Verdedigers staan als lijst van soorten per pad; de posities volgen daar vast uit (ook voor dorpen van andere spelers).
 function layout(types) {
   const mobs = types.filter(k => k !== 'w'), out = []; let mi = 0, wi = 0;
@@ -599,12 +618,12 @@ function layout(types) {
   return out.sort((a, b) => a.d - b.d);
 }
 const DCOST = { k:1, m:1, w:2 }, DK = ['k', 'm', 'w'];
-const defBudget = () => 4 + 2*SV.b.dike + (bonus('dike') ? 1 : 0);
+const defBudget = () => 4 + SV.b.dike + (bonus('dike') ? 1 : 0);
 const defPoints = def => def.reduce((a, l) => a + l.reduce((x, k) => x + DCOST[k], 0), 0);
 const defUsed = () => defPoints(SV.def);
-const defOk = k => SV.b.dike >= (k === 'w' ? 2 : k === 'm' ? 1 : 0);
+const defOk = k => SV.b.dike >= (k === 'w' ? 4 : k === 'm' ? 2 : 0);
 function botDef(lv, seed) { // oefendorp: vast puntenbudget, ongelijk verdeeld zodat er een zwak en een zwaar pad is
-  const r = rng(lv*104729 + 7 + seed*31), B = Math.min(15, Math.round(2.6 + lv*1.1)), cnt = [1, 1, 1], def = [];
+  const r = rng(lv*104729 + 7 + seed*31), B = Math.min(18, Math.round(2.6 + lv*1.1)), cnt = [1, 1, 1], def = [];
   for (let i = 3; i < B; i++) { let j = Math.floor(r()*r()*3); if (cnt[j] >= 6) j = cnt.indexOf(Math.min(...cnt)); cnt[j]++; }
   const rot = Math.floor(r()*3);
   for (let i = 0; i < 3; i++) { const l = []; for (let j = 0; j < cnt[(i + rot) % 3]; j++) { const q = r(); l.push(lv >= 3 && q < .22 ? 'w' : lv >= 2 && q < .5 ? 'm' : 'k'); } def.push(l); }
@@ -618,7 +637,7 @@ const esc = t => String(t).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';'
 function cleanDef(d) { // gegevens van anderen zijn niet te vertrouwen: alleen geldige opstellingen binnen het maximale budget
   if (!Array.isArray(d) || d.length !== 3) return null;
   const out = d.map(l => Array.isArray(l) ? l.filter(k => DCOST[k]).slice(0, 6) : []);
-  return defPoints(out) <= 13 && defPoints(out) > 0 ? out : null;
+  return defPoints(out) <= 25 && defPoints(out) > 0 ? out : null;
 }
 async function netInit() {
   try {
@@ -633,13 +652,13 @@ let pushT = 0;
 function netPush() { // eigen dorp delen: naam, bekers en verdediging
   if (!NET.db) return Promise.resolve();
   clearTimeout(pushT);
-  return new Promise(res => { pushT = setTimeout(() => NET.db.doc('players/' + NET.id).set({ name:SV.name.slice(0, 20), tr:SV.tr, def:SV.def, ts:Date.now() }).catch(() => {}).then(res), 600); });
+  return new Promise(res => { pushT = setTimeout(() => NET.db.doc('players/' + NET.id).set({ name:SV.name.slice(0, 20), tr:SV.tr, def:SV.def, wl:SV.b.dike, hl:SV.b.hall, ts:Date.now() }).catch(() => {}).then(res), 600); });
 }
 async function netPull() {
   if (!NET.db) return;
   try {
     const snap = await NET.db.collection('players').orderBy('ts', 'desc').limit(60).get(); NET.players = [];
-    for (const d of snap.docs) { const v = d.data() || {}, def = cleanDef(v.def); if (d.id !== NET.id && def) NET.players.push({ id:d.id, name:String(v.name || 'Onbekend dorp').slice(0, 20), tr:Math.max(0, Math.floor(+v.tr || 0)), def }); }
+    for (const d of snap.docs) { const v = d.data() || {}, def = cleanDef(v.def); if (d.id !== NET.id && def) NET.players.push({ id:d.id, name:String(v.name || 'Onbekende stad').slice(0, 20), tr:Math.max(0, Math.floor(+v.tr || 0)), def, wl:clamp(Math.floor(+v.wl || 0), 0, MAXL), hl:clamp(Math.floor(+v.hl || 1), 1, MAXL) }); }
   } catch (e) {}
 }
 async function netInbox() { // wie viel mij aan sinds de vorige keer?
@@ -647,7 +666,7 @@ async function netInbox() { // wie viel mij aan sinds de vorige keer?
   try {
     const snap = await NET.db.collection('attacks').where('to', '==', NET.id).get(); let seen = SV.seen;
     for (const d of snap.docs) { const v = d.data() || {}, ts = +v.ts || 0, st = clamp(Math.floor(+v.stars || 0), 0, 3); if (ts <= SV.seen) continue;
-      const dt = st ? -4*st : 6; SV.tr = Math.max(0, SV.tr + dt); SV.log.unshift({ name:String(v.name || 'Onbekend dorp').slice(0, 20), stars:st, dt, ts }); seen = Math.max(seen, ts); }
+      const dt = st ? -4*st : 6; SV.tr = Math.max(0, SV.tr + dt); SV.log.unshift({ name:String(v.name || 'Onbekende stad').slice(0, 20), stars:st, dt, ts }); seen = Math.max(seen, ts); }
     if (seen !== SV.seen) { SV.seen = seen; SV.log = SV.log.sort((a, b) => b.ts - a.ts).slice(0, 8); save(); netPush(); }
   } catch (e) {}
 }
@@ -657,19 +676,19 @@ function refresh() { if ($('dorp').classList.contains('on')) renderDorp(); else 
 let tIdx = 0;
 function targets() { // echte spelers eerst (dichtst bij jouw bekers), daarna altijd een oefendorp
   const lv = 1 + Math.floor(SV.tr/24), list = NET.players.slice().sort((a, b) => Math.abs(a.tr - SV.tr) - Math.abs(b.tr - SV.tr));
-  list.push({ id:null, bot:true, name:'Oefendorp', tr:SV.tr, def:botDef(lv, Math.floor(tIdx/(list.length + 1))) });
+  list.push({ id:null, bot:true, name:'Oefenkamp', tr:SV.tr, wl:Math.min(MAXL, lv - 1), hl:SV.b.hall, def:botDef(lv, Math.floor(tIdx/(list.length + 1))) });
   return list;
 }
-function curTarget() { const l = targets(), t = l[tIdx % l.length]; t.gold = 50 + 8*defPoints(t.def) + Math.floor(t.tr/5); t.pearls = 1 + Math.floor(t.tr/100); return t; }
+function curTarget() { const l = targets(), t = l[tIdx % l.length]; t.gold = r50(60*Math.pow(1.33, t.hl - 1) + 6*defPoints(t.def)); t.pearls = 1 + Math.floor(t.tr/100); return t; }
 
 function renderVerd() {
   $('res4').innerHTML = resHtml();
-  let h = `<div class="card"><label for="nm"><b>Naam van je dorp</b></label><input class="nm" id="nm" maxlength="20" value="${esc(SV.name)}"><small style="display:block;color:#4b5b6b;margin-top:4px">${NET.state === 'online' ? 'Online: andere spelers kunnen je dorp aanvallen.' : 'Offline: je dorp is niet zichtbaar voor anderen.'}</small></div>`;
-  h += `<div class="card"><b>Verdedigingspunten: ${defUsed()} / ${defBudget()}</b><small style="display:block;color:#4b5b6b">Een aanvaller moet 2 van je 3 nesten vernielen om bekers te winnen. 🦀 1 punt · 🐦 1 punt (Muur niveau 1) · 🐚 toren 2 punten (Muur niveau 2). Tik op een verdediger om hem weg te halen.</small></div>`;
+  let h = `<div class="card"><label for="nm"><b>Naam van je stad</b></label><input class="nm" id="nm" maxlength="20" value="${esc(SV.name)}"><small style="display:block;color:#4b5b6b;margin-top:4px">${NET.state === 'online' ? 'Online: andere spelers kunnen je stad aanvallen.' : 'Offline: je stad is niet zichtbaar voor anderen.'}</small></div>`;
+  h += `<div class="card"><b>Verdedigingspunten: ${defUsed()} / ${defBudget()}</b><small style="display:block;color:#4b5b6b">Een aanvaller moet 2 van je 3 vaandels veroveren om bekers te winnen. 🗡️ wachter 1 punt · 🦅 adelaar 1 punt (Muur niveau 2) · 🗼 ballista 2 punten (Muur niveau 4). Tik op een verdediger om hem weg te halen.</small></div>`;
   SV.def.forEach((l, i) => {
-    h += `<div class="card"><b>Pad ${i+1}</b><div class="row" style="flex-wrap:wrap;gap:6px;margin:6px 0">${l.map((k, j) => `<button class="chip" data-act="ddel" data-l="${i}" data-j="${j}" aria-label="${DT[k].n} weghalen">${DT[k].i}</button>`).join('') || '<small>Onverdedigd</small>'}<span style="font-size:22px">→ 🥚</span></div><div class="row" style="gap:6px">` +
+    h += `<div class="card"><b>Weg ${i+1}</b><div class="row" style="flex-wrap:wrap;gap:6px;margin:6px 0">${l.map((k, j) => `<button class="chip" data-act="ddel" data-l="${i}" data-j="${j}" aria-label="${DT[k].n} weghalen">${DT[k].i}</button>`).join('') || '<small>Onverdedigd</small>'}<span style="font-size:22px">→ 🚩</span></div><div class="row" style="gap:6px">` +
       DK.map(k => `<button class="${defOk(k) && defUsed() + DCOST[k] <= defBudget() && l.length < 6 ? 'ghost' : 'off'}" style="flex:1;min-height:44px" data-act="dadd" data-l="${i}" data-k="${k}">＋ ${DT[k].i}</button>`).join('') + `</div></div>`; });
-  h += `<h3>Aanvallen op jouw dorp</h3><div class="card">` + (SV.log.length ? SV.log.map(e => `<div>${esc(e.name)}: ${e.stars ? '⭐'.repeat(e.stars) : 'afgeslagen'} <b class="${e.dt > 0 ? 'ok' : 'nok'}">${e.dt > 0 ? '+' : ''}${e.dt} 🏆</b></div>`).join('') : `<small>Nog niemand heeft je aangevallen.</small>`) + `</div>`;
+  h += `<h3>Aanvallen op jouw stad</h3><div class="card">` + (SV.log.length ? SV.log.map(e => `<div>${esc(e.name)}: ${e.stars ? '⭐'.repeat(e.stars) : 'afgeslagen'} <b class="${e.dt > 0 ? 'ok' : 'nok'}">${e.dt > 0 ? '+' : ''}${e.dt} 🏆</b></div>`).join('') : `<small>Nog niemand heeft je aangevallen.</small>`) + `</div>`;
   $('defList').innerHTML = h;
 }
 function openVerd() { G.mode = 'dorp'; renderVerd(); show('verd'); netInbox().then(() => { if ($('verd').classList.contains('on') && document.activeElement.id !== 'nm') renderVerd(); }); }
@@ -678,16 +697,16 @@ document.addEventListener('change', e => { if (e.target.id === 'nm') { SV.name =
 function renderLeger() {
   $('res3').innerHTML = resHtml();
   let h = '';
-  if (!SV.b.bar && !SV.b.arch) h = `<div class="note">Je hebt nog geen Kazerne of Boogschutterskamp. Bouw er een op de dorpskaart om wachters te trainen en aan te vallen.</div>`;
+  if (!SV.b.bar && !SV.b.arch) h = `<div class="note">Je hebt nog geen Kazerne of Boogschutterskamp. Bouw er een in je stad om soldaten te trainen en aan te vallen.</div>`;
   else {
-    h += `<div class="card"><b>Wachters: ${armySize()} / ${armyCap()}</b><small style="display:block;color:#4b5b6b">Herberg: +${Math.round((hpMul()-1)*100)}% leven · Werkplaats: +${Math.round((dmgMul()-1)*100)}% schade · Muur: ${raidTime()} s tot de vloed</small></div>`;
-    for (const k of UK) { const u = UT[k], ok = unitOk(k), can = ok && armySize() < armyCap() && SV.gold >= u.cost;
-      h += `<div class="card row"><div class="ico">${u.i}</div><div class="txt"><b>${u.n}</b> × ${SV.army[k]}<small>${ok ? u.tip : unitWhy[k]}</small></div><button class="${can ? '' : 'off'}" data-act="train" data-k="${k}">Train<br>🪙${u.cost}</button></div>`; }
+    h += `<div class="card"><b>Leger: ${armySize()} / ${armyCap()}</b><small style="display:block;color:#4b5b6b">Taverne: +${Math.round((hpMul()-1)*100)}% leven · Smederij: +${Math.round((dmgMul()-1)*100)}% schade · ${raidTime()} s tot de vijand versterking krijgt</small></div>`;
+    for (const k of UK) { const u = UT[k], ok = unitOk(k), can = ok && armySize() < armyCap() && SV.gold >= ucost(k);
+      h += `<div class="card row"><div class="ico">${u.i}</div><div class="txt"><b>${u.n}</b> × ${SV.army[k]}<small>${ok ? u.tip : unitWhy[k]}</small></div><button class="${can ? '' : 'off'}" data-act="train" data-k="${k}">Train<br>🪙${ucost(k)}</button></div>`; }
     const tg = curTarget(), vis = sight();
     h += `<h3>Doelwit</h3><div class="card"><b>${tg.bot ? '🤖 ' : '🏛️ '}${esc(tg.name)}</b> · 🏆 ${tg.tr}${tg.bot ? ' <small style="display:inline;color:#4b5b6b">(computer, geen echte speler)</small>' : ''}` +
-      tg.def.map(layout).map((ds, i) => `<div><b>Pad ${i+1}:</b> ${ds.map(d => d.d <= vis ? DT[d.k].i : '❓').join(' ')} → 🥚</div>`).join('') +
-      `<small style="display:block;color:#4b5b6b;margin-top:4px">Buit: 🪙 ${tg.gold} per nest, ⚪ ${tg.pearls} bij 3 nesten · 🏆 +8 per nest, −6 bij 0.${vis < 470 ? ' ❓ = buiten zicht; een hogere Vuurtoren ziet verder.' : ''}</small></div>`;
-    h += `<div class="note">${NET.state === 'online' ? (NET.players.length ? `Online: ${NET.players.length} andere ${NET.players.length === 1 ? 'speler' : 'spelers'} gevonden.` : 'Online, maar er zijn nog geen andere spelers. Je vecht tegen oefendorpen tot iemand anders meedoet.') : 'Offline: alleen oefendorpen. Echte tegenstanders zijn er alleen via de gedeelde Claude-pagina.'}</div>`;
+      tg.def.map(layout).map((ds, i) => `<div><b>Weg ${i+1}:</b> ${ds.map(d => d.d <= vis ? DT[d.k].i : '❓').join(' ')} → 🚩</div>`).join('') +
+      `<small style="display:block;color:#4b5b6b;margin-top:4px">Buit: 🪙 ${tg.gold} per vaandel, ⚪ ${tg.pearls} bij 3 vaandels · 🏆 +8 per vaandel, −6 bij 0.${vis < 470 ? ' ❓ = buiten zicht; een hogere Wachttoren ziet verder.' : ''}</small></div>`;
+    h += `<div class="note">${NET.state === 'online' ? (NET.players.length ? `Online: ${NET.players.length} andere ${NET.players.length === 1 ? 'speler' : 'spelers'} gevonden.` : 'Online, maar er zijn nog geen andere spelers. Je vecht tegen oefenkampen tot iemand anders meedoet.') : 'Offline: alleen oefenkampen. Echte tegenstanders zijn er alleen via de gedeelde Claude-pagina.'}</div>`;
   }
   $('armyList').innerHTML = h;
   $('raidBtn').textContent = '⚔️ Val aan';
@@ -696,13 +715,13 @@ function renderLeger() {
 function openLeger() { G.mode = 'dorp'; moving = null; renderLeger(); show('leger'); netPull().then(() => { if ($('leger').classList.contains('on')) renderLeger(); }); }
 
 let R = null;
-function mk(side, k, lane, d) { const def = side ? DT[k] : UT[k], hp = def.hp*(side ? 1 : R.hm), e = { side, k, lane, d, hp, max:hp, def, home:d, dm:side ? 1 : R.dm*(k === 'a' ? R.am : 1) }; R.ents.push(e); return e; }
+function mk(side, k, lane, d) { const def = side ? DT[k] : UT[k], hp = def.hp*(side ? R.em : R.hm), e = { side, k, lane, d, hp, max:hp, def, home:d, dm:side ? R.em : R.dm*(k === 'a' ? R.am : 1) }; R.ents.push(e); return e; }
 function startRaid() {
   if (!armySize()) { sfx('no'); return; }
   const tg = curTarget(), g = { lanes:tg.def.map(layout) };
-  R = { tg, gold:tg.gold, pearls:tg.pearls, t:0, time:raidTime(), left:Object.assign({}, SV.army), sel:null, ents:[], nest:[], stars:0, lost:0, sent:0, sight:sight(), hm:hpMul(), dm:dmgMul(), am:archMul() };
+  R = { tg, gold:tg.gold, pearls:tg.pearls, t:0, time:raidTime(), left:Object.assign({}, SV.army), sel:null, ents:[], nest:[], stars:0, lost:0, sent:0, sight:sight(), hm:hpMul(), dm:dmgMul(), am:archMul(), em:1 + .04*(tg.wl || 0) };
   g.lanes.forEach((ds, i) => { R.nest.push(mk(1, 'n', i, 500)); for (const d of ds) mk(1, d.k, i, d.d); });
-  R.sel = UK.find(k => R.left[k] > 0); G.mode = 'raid'; renderRaidBar(); show('raid');
+  R.sel = UK.find(k => R.left[k] > 0); G.mode = 'raid'; if (GL.ok) raidScene(tg); renderRaidBar(); show('raid');
 }
 function renderRaidBar() {
   let h = '';
@@ -750,8 +769,8 @@ function endRaid() {
   extra += `<br>🏆 ${dt > 0 ? '+' : ''}${dt}`;
   netAttack(R.tg, s); netPush(); tIdx++;
   save(); if (s) sfx('bell');
-  $('eTitle').textContent = s ? '⚔️ ' + '⭐'.repeat(s) + '☆'.repeat(3 - s) : '🌊 Teruggedreven';
-  $('eText').innerHTML = `${s} van 3 nesten vernield${R.t >= R.time ? ' voordat de vloed kwam' : ''}.<br>🪙 ${gold} &nbsp; ⚪ ${pearls}${extra}<br>Verloren wachters: ${R.lost}`;
+  $('eTitle').textContent = s ? '⚔️ ' + '⭐'.repeat(s) + '☆'.repeat(3 - s) : '🏳️ Teruggedreven';
+  $('eText').innerHTML = `${s} van 3 vaandels veroverd${R.t >= R.time ? ' voordat de versterking kwam' : ''}.<br>🪙 ${gold} &nbsp; ⚪ ${pearls}${extra}<br>Gesneuvelde soldaten: ${R.lost}`;
   $('revBtn').hidden = true; $('revBtn').style.display = 'none'; $('eBtn').textContent = '⚔️ Volgende'; show('eind');
 }
 function drawRaid() {
@@ -787,6 +806,233 @@ function drawRaid() {
   if (!R.sent) { ctx.textAlign = 'center'; ctx.fillStyle = '#0b1c2ccc'; rr(W/2 - 165, 100, 330, 34, 10); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = 'bold 14px system-ui'; ctx.fillText('Kies een wachter onderaan en tik op een pad', W/2, 117); }
 }
 
+/* ===================== 3D: Romeinse stad en slagveld (Three.js) ===================== */
+const T3 = window.THREE, GL = { ok:false, fires:[], patrols:[], rhw:6 };
+const C = { wood:'#8a5a2b', dark:'#3f2e22', straw:'#d9b25f', plaster:'#efe2c4', stone:'#b3ab9b', marble:'#f6f2e8', tile:'#b5452c', gold:'#e6b422', red:'#a51c1c',
+  iron:'#59606b', cloth:'#eadfc3', grass:'#86ad55', sand:'#d8c38e', rock:'#8d8a84', fire:'#ff8a1f', water:'#4aa3d8', green:'#2f5d34', skin:'#e8b98f', blue:'#3b5b8c' };
+const WALLC = [C.wood, C.plaster, C.stone, C.marble], ROOFC = [C.straw, C.tile, C.tile, C.tile];
+const MATS = {}, GEOS = {};
+const M = c => MATS[c] || (MATS[c] = new T3.MeshPhongMaterial({ color:c, flatShading:true, shininess:0 }));
+const geo = (k, f) => GEOS[k] || (GEOS[k] = f());
+function add(g, ge, c, x, y, z) { const m = new T3.Mesh(ge, M(c)); m.position.set(x, y, z); g.add(m); return m; }
+function box(g, w, h, d, c, x = 0, y = 0, z = 0) { const m = add(g, geo('b', () => new T3.BoxGeometry(1, 1, 1)), c, x, y + h/2, z); m.scale.set(w, h, d); return m; }
+function cyl(g, rt, rb, h, c, x = 0, y = 0, z = 0, seg = 8) { return add(g, geo('c' + [rt, rb, h, seg], () => new T3.CylinderGeometry(rt, rb, h, seg)), c, x, y + h/2, z); }
+function roof(g, w, h, d, c, x = 0, y = 0, z = 0) { // schilddak (piramide op rechthoek)
+  const m = add(g, geo('r', () => new T3.ConeGeometry(Math.SQRT1_2, 1, 4).rotateY(Math.PI/4)), c, x, y + h/2, z); m.scale.set(w, h, d); return m; }
+function ped(g, w, h, d, c, x = 0, y = 0, z = 0) { // zadeldak / fronton: driehoek aan de voorkant
+  const m = add(g, geo('p', () => new T3.CylinderGeometry(1, 1, 1, 3).rotateX(-Math.PI/2)), c, x, y + h/3, z); m.scale.set(w/Math.sqrt(3), h/1.5, d); return m; }
+function sph(g, r, c, x = 0, y = 0, z = 0) { const m = add(g, geo('s', () => new T3.SphereGeometry(1, 8, 6)), c, x, y, z); m.scale.set(r, r, r); return m; }
+function rock(g, sx, sy, sz, c, x = 0, y = 0, z = 0) { const m = add(g, geo('d', () => new T3.DodecahedronGeometry(1, 0)), c, x, y, z); m.scale.set(sx, sy, sz); return m; }
+
+function house(g, t, w, h, d, x = 0, z = 0, y = 0) { box(g, w, h, d, WALLC[t], x, y, z); roof(g, w + .35, h*.6, d + .35, ROOFC[t], x, y + h, z); box(g, .36, Math.min(.7, h*.6), .06, C.dark, x, y, z + d/2); }
+function temple(g, w, h, d, n, wall, gold, x = 0, z = 0) {
+  box(g, w + .7, .25, d + .7, C.stone, x, 0, z); box(g, w + .35, .18, d + .35, C.marble, x, .25, z);
+  box(g, w - .6, h, d - 1, wall, x, .43, z - .25);
+  for (let i = 0; i < n; i++) cyl(g, .11, .14, h, C.marble, x - w/2 + .2 + i*(w - .4)/(n - 1), .43, z + d/2 - .18);
+  box(g, w, .18, d, C.marble, x, .43 + h, z); ped(g, w + .25, h*.5, d + .25, gold ? C.gold : C.tile, x, .61 + h, z);
+}
+function banner(g, x, z, h, y = 0) { cyl(g, .04, .04, h, C.dark, x, y, z, 5); box(g, .5, .6, .05, C.red, x + .27, y + h - .7, z); box(g, .5, .08, .06, C.gold, x + .27, y + h - .1, z); }
+function coins(g, x, z, n) { for (let i = 0; i < n; i++) cyl(g, .17, .17, .12 + .1*((i*7) % 4), C.gold, x + (i % 3)*.36, 0, z + Math.floor(i/3)*.36, 8); }
+function fire(g, x, y, z, s) { const m = add(g, geo('f', () => new T3.ConeGeometry(.3, .8, 5)), C.fire, x, y + .4*s, z); m.scale.set(s, s, s); GL.fires.push(m); return m; }
+function crenels(g, w, d, y, c, x = 0, z = 0) { for (let i = -w/2 + .2; i <= w/2 - .1; i += .55) { box(g, .28, .25, .12, c, x + i, y, z + d/2 - .06); box(g, .28, .25, .12, c, x + i, y, z - d/2 + .06); } }
+
+// Elk gebouw in vier stadia: t = 0 hout, 1 steen, 2 groot steen, 3 marmer en goud.
+const MODEL = {
+  hall(g, t) {
+    if (t === 0) { house(g, 0, 2.2, 1.1, 1.8); box(g, .5, .5, .5, C.wood, 1.5, 0, .5); }
+    else if (t === 1) { house(g, 1, 2.9, 1.5, 2.2); house(g, 1, 1.2, 1, 1.4, 1.9, .3); }
+    else if (t === 2) { temple(g, 3.3, 1.7, 2.9, 4, C.plaster); banner(g, -2, 1.4, 2.2); banner(g, 2, 1.4, 2.2); }
+    else { temple(g, 3.9, 2.3, 3.3, 6, C.marble, true); sph(g, .85, C.gold, 0, 3.55, -.3); house(g, 3, 1.2, 1.2, 1.9, -2.75, -.2); house(g, 3, 1.2, 1.2, 1.9, 2.75, -.2);
+      cyl(g, .16, .2, 1.3, C.marble, 0, 0, 2.5); sph(g, .26, C.gold, 0, 1.55, 2.5); banner(g, -2.2, 2.2, 2.6); banner(g, 2.2, 2.2, 2.6); }
+  },
+  bank(g, t) {
+    if (t === 0) { house(g, 0, 1.7, .95, 1.4); box(g, .6, .4, .4, C.wood, 1.2, 0, .6); box(g, .64, .08, .44, C.gold, 1.2, .4, .6); }
+    else if (t === 1) { house(g, 1, 2.3, 1.2, 1.8); coins(g, 1.1, .9, 4); }
+    else if (t === 2) { temple(g, 2.7, 1.4, 2.3, 4, C.plaster); coins(g, -.5, 1.8, 6); }
+    else { temple(g, 3.3, 1.9, 2.7, 5, C.marble, true); coins(g, -.9, 2, 9); box(g, .8, .5, .5, C.gold, 1.4, 0, 2); }
+  },
+  mine(g, t) {
+    const k = 1 + .14*t; rock(g, 1.5*k, 1.05*k, 1.3*k, C.rock, 0, .55*k, -.3); box(g, .75, .85, .4, '#1d1712', 0, 0, .75*k);
+    cyl(g, .07, .07, 1, C.wood, -.45, 0, .98*k, 5); cyl(g, .07, .07, 1, C.wood, .45, 0, .98*k, 5); box(g, 1.1, .12, .14, C.wood, 0, .95, .98*k);
+    if (t >= 1) { box(g, .6, .3, .42, C.wood, 1.3, .1, 1.1); box(g, .5, .14, .34, C.gold, 1.3, .4, 1.1); }
+    if (t >= 2) { box(g, 1.3, .22, .5, C.stone, 0, 1.05, .9*k); cyl(g, .07, .09, 2.3, C.wood, -1.5, 0, .8, 5); box(g, 1.2, .1, .1, C.wood, -1, 2.2, .8); }
+    if (t >= 3) { rock(g, .9, .7, .8, C.rock, 1.5, .4, -.9); for (let i = 0; i < 5; i++) rock(g, .16, .16, .16, C.gold, Math.cos(i*1.9)*1.1, .7 + .25*(i % 3), Math.sin(i*1.9)*.9 - .2); }
+  },
+  bar(g, t) {
+    if (t === 0) { roof(g, 1.4, 1.2, 1.4, C.cloth, -.85, 0, -.2); roof(g, 1.4, 1.2, 1.4, C.cloth, .85, 0, .3); fire(g, 0, 0, 1.3, .5); }
+    else if (t === 1) { house(g, 0, 3, 1.1, 1.6); banner(g, 1.8, .9, 2); }
+    else if (t === 2) { house(g, 2, 3.5, 1.3, 1.3, 0, -1); house(g, 2, 1.2, 1.3, 1.9, -1.15, .6); house(g, 2, 1.2, 1.3, 1.9, 1.15, .6); banner(g, -1.9, 1.7, 2.3); banner(g, 1.9, 1.7, 2.3); }
+    else { box(g, 3.5, 1.9, 3, C.stone); crenels(g, 3.5, 3, 1.9, C.stone); box(g, .7, 1, .08, C.dark, 0, 0, 1.5);
+      for (const [x, z] of [[-1.75, -1.5], [1.75, -1.5], [-1.75, 1.5], [1.75, 1.5]]) { cyl(g, .48, .52, 2.7, C.marble, x, 0, z); cyl(g, .56, .5, .2, C.marble, x, 2.7, z); }
+      banner(g, -1.75, 1.5, 1.4, 2.9); banner(g, 1.75, 1.5, 1.4, 2.9); cyl(g, .05, .05, 1.6, C.gold, 0, 1.9, 0, 5); box(g, .7, .14, .1, C.gold, 0, 3.5, 0); }
+  },
+  arch(g, t) {
+    const target = (x, z) => { cyl(g, .05, .05, .9, C.wood, x, 0, z - .08, 5); const a = cyl(g, .42, .42, .08, C.marble, x, .66, z); a.rotation.x = Math.PI/2; const b = cyl(g, .2, .2, .1, C.red, x, .65, z); b.rotation.x = Math.PI/2; };
+    target(.9, .9); if (t >= 1) target(-.2, 1.2); if (t >= 3) target(1.6, .2);
+    if (t === 0) roof(g, 1.5, 1.2, 1.5, C.cloth, -.8, 0, -.4);
+    else if (t === 1) { box(g, 1.8, .5, 1.4, C.wood, -.7, 0, -.5); roof(g, 1.3, 1, 1.2, C.cloth, -.7, .5, -.5); }
+    else { const h = t === 2 ? 2 : 2.9; box(g, 1.3, h, 1.3, WALLC[t], -.8, 0, -.5); box(g, 1.7, .16, 1.7, C.wood, -.8, h, -.5); crenels(g, 1.7, 1.7, h + .16, WALLC[t], -.8, -.5);
+      if (t === 3) { roof(g, 1.5, .8, 1.5, C.tile, -.8, h + 1, -.5); for (const [x, z] of [[-.6, -.6], [.6, -.6], [-.6, .6], [.6, .6]]) cyl(g, .05, .05, .85, C.wood, -.8 + x, h + .16, -.5 + z, 5); banner(g, .6, -1.2, 2.6); } }
+  },
+  dike(g, t) { // poortgebouw; de muur zelf loopt om de hele stad
+    if (t === 0) { cyl(g, .13, .15, 1.7, C.wood, -.8, 0, 0); cyl(g, .13, .15, 1.7, C.wood, .8, 0, 0); box(g, 2, .16, .2, C.wood, 0, 1.5, 0); }
+    else if (t === 1) { box(g, .8, 1.3, .8, C.plaster, -.9, 0, 0); box(g, .8, 1.3, .8, C.plaster, .9, 0, 0); box(g, 2.6, .25, .7, C.stone, 0, 1.3, 0); }
+    else if (t === 2) { box(g, 3, 1.9, 1, C.stone); box(g, .9, 1.2, 1.04, C.dark); crenels(g, 3, 1, 1.9, C.stone); }
+    else { box(g, 2.2, 2, 1, C.stone); box(g, .9, 1.3, 1.04, C.dark); crenels(g, 2.2, 1, 2, C.stone);
+      for (const x of [-1.5, 1.5]) { cyl(g, .6, .66, 3, C.marble, x, 0, 0); cyl(g, .7, .62, .22, C.marble, x, 3, 0); roof(g, 1.3, .8, 1.3, C.tile, x, 3.2, 0); banner(g, x, .75, 1.3, 2.2); } }
+  },
+  light(g, t) {
+    if (t === 0) { for (const [x, z] of [[-.5, -.5], [.5, -.5], [-.5, .5], [.5, .5]]) cyl(g, .07, .09, 2, C.wood, x, 0, z, 5); box(g, 1.4, .12, 1.4, C.wood, 0, 2, 0); fire(g, 0, 2.12, 0, .7); return; }
+    const h = [0, 2.3, 3.2, 4.1][t], r = .5 + .1*t, c = WALLC[t];
+    cyl(g, r*.85, r, h, c); cyl(g, r + .2, r*.9, .22, c, 0, h, 0); for (let i = 0; i < 6; i++) box(g, .22, .24, .22, c, Math.cos(i*1.047)*(r + .06), h + .22, Math.sin(i*1.047)*(r + .06));
+    if (t === 3) { for (let i = 0; i < 4; i++) cyl(g, .05, .05, .9, C.marble, Math.cos(i*1.57 + .78)*.55, h + .22, Math.sin(i*1.57 + .78)*.55, 5); roof(g, 1.5, .6, 1.5, C.tile, 0, h + 1.12, 0); banner(g, 1.2, 0, 2.4); }
+    fire(g, 0, h + .22, 0, .6 + .15*t);
+  },
+  inn(g, t) {
+    const amph = (x, z) => { cyl(g, .16, .08, .5, C.tile, x, 0, z, 6); cyl(g, .07, .12, .16, C.tile, x, .5, z, 6); };
+    if (t === 0) { house(g, 0, 1.9, 1, 1.5); cyl(g, .26, .26, .5, C.wood, 1.3, 0, .5); }
+    else if (t === 1) { house(g, 1, 2.5, 1.3, 1.8); amph(1.5, .6); amph(1.5, 1); }
+    else if (t === 2) { house(g, 2, 2.6, 2.1, 2, 0, -.4); for (const x of [-1, 1]) cyl(g, .07, .07, 1.2, C.wood, x, 0, 1.4, 5); box(g, 2.4, .1, 1, C.wood, 0, 1.2, 1); amph(-1.6, .9); amph(1.6, .9); }
+    else { house(g, 3, 3.2, 1.7, 1.5, 0, -1.1); for (const x of [-1.4, -.5, .5, 1.4]) cyl(g, .1, .12, 1.3, C.marble, x, 0, .5); box(g, 3.2, .16, .5, C.marble, 0, 1.3, .5);
+      cyl(g, .7, .75, .25, C.stone, 0, 0, 1.7); cyl(g, .58, .58, .3, C.water, 0, 0, 1.7); cyl(g, .08, .12, .7, C.marble, 0, 0, 1.7, 6); amph(-1.8, 1.4); amph(1.8, 1.4); }
+  },
+  shop(g, t) {
+    const anvil = (x, z) => { box(g, .3, .3, .3, C.wood, x, 0, z); box(g, .5, .16, .24, C.iron, x, .3, z); };
+    if (t === 0) { for (const [x, z] of [[-.8, -.6], [.8, -.6], [-.8, .6], [.8, .6]]) cyl(g, .07, .08, 1.2, C.wood, x, 0, z, 5); box(g, 2, .12, 1.6, C.straw, 0, 1.2, 0); anvil(0, 0); return; }
+    house(g, t, 1.9 + .4*t, 1.1 + .15*t, 1.5 + .2*t, 0, -.3); cyl(g, .2, .26, 2 + .4*t, C.dark, -.7, 0, -.6, 6); anvil(1.1 + .15*t, 1);
+    if (t >= 2) { box(g, .7, .5, .1, C.fire, .3, .1, .52 + .1*t); fire(g, -.7, 2 + .4*t, -.6, .4); }
+    if (t >= 3) { cyl(g, .2, .26, 2.9, C.dark, .8, 0, -.8, 6); for (let i = 0; i < 3; i++) { const sh = cyl(g, .22, .22, .06, C.gold, -1.7, .5, .3 + i*.55); sh.rotation.z = Math.PI/2; } box(g, .08, .9, 1.7, C.wood, -1.78, 0, .85); }
+  },
+};
+function soldier(g, body, t, x = 0, z = 0, y = 0) { // t: 0 legionair, 1 boogschutter, 2 wachter
+  cyl(g, .2, .26, .62, body, x, y + .1, z, 7); sph(g, .19, C.skin, x, y + .9, z);
+  if (t !== 1) { const h = sph(g, .21, C.iron, x, y + .95, z); h.scale.y = .16; box(g, .06, .16, .34, t ? C.blue : C.red, x, y + 1.08, z); }
+  return g;
+}
+function wallRun(g, x1, z1, x2, z2, t) { // één muurstuk tussen twee punten, uiterlijk per stadium
+  const L = Math.hypot(x2 - x1, z2 - z1), w = new T3.Group(); w.position.set((x1 + x2)/2, 0, (z1 + z2)/2); w.rotation.y = -Math.atan2(z2 - z1, x2 - x1); g.add(w);
+  if (t === 0) { box(w, L, 1, .2, C.wood); for (let i = -L/2; i <= L/2; i += 1.1) { cyl(w, .13, .15, 1.25, C.wood, i, 0, 0, 5); const tip = add(w, geo('tip', () => new T3.ConeGeometry(.14, .3, 5)), C.wood, i, 1.4, 0); } }
+  else if (t === 1) { box(w, L, .95, .6, '#cfc7b4'); box(w, L, .12, .7, C.stone, 0, .95, 0); }
+  else { const h = t === 2 ? 1.9 : 2.3, d = t === 2 ? .75 : .95; box(w, L, h, d, C.stone); for (let i = -L/2 + .3; i <= L/2 - .2; i += .9) box(w, .45, .32, d, C.stone, i, h, 0); if (t === 3) box(w, L, .1, d + .14, C.marble, 0, h - .5, 0); }
+}
+function cityWall(g, t, W) { // muur rond de stad met poort aan de voorkant; torens en patrouilles in de hoogste stadia
+  wallRun(g, -W, -W, W, -W, t); wallRun(g, -W, -W, -W, W, t); wallRun(g, W, -W, W, W, t); wallRun(g, -W, W, -1.6, W, t); wallRun(g, 1.6, W, W, W, t);
+  if (t >= 2) { const h = t === 2 ? 2.7 : 3.5, s = t === 2 ? 1.5 : 1.9;
+    for (const [x, z] of [[-W, -W], [W, -W], [-W, W], [W, W], [-2.2, W], [2.2, W]]) { const sm = Math.abs(x) < 3 ? .75 : 1; box(g, s*sm, h, s*sm, t === 3 ? C.marble : C.stone, x, 0, z); crenels(g, s*sm, s*sm, h, C.stone, x, z); if (t === 3) roof(g, s*sm + .2, .9, s*sm + .2, C.tile, x, h + .5, z); }
+    if (t === 3) { for (const [x, z] of [[-W, -W], [W, -W], [-W, W], [W, W]]) for (const dx of [-1, 1]) cyl(g, .05, .05, .5, C.wood, x + dx*.6, h, z + dx*.6, 5); box(g, 3.2, .5, 1, C.marble, 0, 2.3, W); } }
+  else if (t === 1) for (const x of [-2, 2]) box(g, .9, 1.4, .9, C.stone, x, 0, W);
+  else for (const x of [-1.8, 1.8]) cyl(g, .2, .22, 1.9, C.wood, x, 0, W, 6);
+}
+
+const PPOS = [[-7, -7], [0, -7], [7, -7], [-7, 0], [7, 0], [0, 7], [0, 0], [7, 7], [-7, 7]], VW = 13;
+const plotY = i => TERR[i] === 'heuvel' ? .5 : 0;
+function initGL() {
+  if (!T3) return;
+  try {
+    const r = GL.r = new T3.WebGLRenderer({ canvas:$('gl'), antialias:true }); r.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); r.setSize(innerWidth, innerHeight, false);
+    const lights = sc => { sc.add(new T3.HemisphereLight(0xffffff, 0x6b5a3e, .5)); const d = new T3.DirectionalLight(0xfff0d0, .5); d.position.set(-8, 16, 10); sc.add(d); };
+    const vs = GL.vs = new T3.Scene(); vs.background = new T3.Color('#bfe0f5'); lights(vs);
+    GL.vc = new T3.OrthographicCamera(-1, 1, 1, -1, .1, 300); GL.vc.position.set(0, 36, 30); GL.vc.lookAt(0, 0, -1);
+    const st = new T3.Group(); vs.add(st);
+    box(st, 120, .4, 120, '#8fae62', 0, -.42, 0); box(st, 2*VW + 2, .3, 2*VW + 2, '#a4c06f', 0, -.3, 0);
+    for (const v of [-7, 0, 7]) { box(st, 16.5, .06, 1.3, C.sand, 0, 0, v); box(st, 1.3, .06, 16.5, C.sand, v, 0, 0); } box(st, 1.6, .06, 6, C.sand, 0, 0, 10); box(st, 3, .06, 3, C.sand, 0, 0, 20);
+    PPOS.forEach(([x, z], i) => { if (plotY(i)) cyl(st, 3, 3.6, .5, '#7aa24c', x, 0, z, 10); box(st, 4.4, .07, 4.4, '#cbb98a', x, plotY(i), z); });
+    for (let i = 0; i < 22; i++) { const a = i*.92, rr2 = 17.5 + (i*5 % 7), x = Math.cos(a)*rr2, z = Math.sin(a)*rr2; cyl(st, .12, .16, .5, C.wood, x, 0, z, 5); const c = add(st, geo('cy', () => new T3.ConeGeometry(.55, 2.6, 6)), C.green, x, 1.8, z); c.scale.setScalar(.8 + (i % 3)*.25); }
+    GL.vg = new T3.Group(); vs.add(GL.vg);
+    GL.ring = new T3.Mesh(new T3.TorusGeometry(2.7, .12, 6, 28), new T3.MeshBasicMaterial({ color:'#f2a900' })); GL.ring.rotation.x = Math.PI/2; vs.add(GL.ring);
+    const rs = GL.rs = new T3.Scene(); rs.background = new T3.Color('#8fae62'); lights(rs);
+    GL.rc = new T3.OrthographicCamera(-1, 1, 1, -1, .1, 300); GL.rc.position.set(0, 40, 27.5); GL.rc.lookAt(0, 0, -.5);
+    box(rs, 80, .3, 80, '#8fae62', 0, -.3, 0); for (let i = 0; i < 3; i++) { box(rs, 2.7, .06, 27, C.sand, (i - 1)*4, 0, 0); box(rs, 2.7, .08, .5, C.marble, (i - 1)*4, 0, 12.3); }
+    for (let i = 0; i < 10; i++) { const x = (i % 2 ? 1 : -1)*(7.5 + (i*3 % 4)), z = -12 + i*2.7; cyl(rs, .12, .16, .5, C.wood, x, 0, z, 5); add(rs, geo('cy', () => new T3.ConeGeometry(.55, 2.6, 6)), C.green, x, 1.8, z); }
+    GL.rg = new T3.Group(); rs.add(GL.rg);
+    GL.ok = true; document.body.classList.add('has3d');
+  } catch (e) { GL.ok = false; }
+}
+function syncVillage() { // de stad opnieuw opbouwen als er iets veranderd is
+  const sig = JSON.stringify([SV.plots, SV.b, SV.job && SV.job.k]);
+  if (sig !== GL.sig) {
+    GL.sig = sig; GL.vs.remove(GL.vg); GL.vg = new T3.Group(); GL.vs.add(GL.vg); GL.fires = []; GL.patrols = [];
+    SV.plots.forEach((k, i) => {
+      const [x, z] = PPOS[i], g = new T3.Group(); g.position.set(x, plotY(i) + .07, z); GL.vg.add(g);
+      if (!k) { for (const [a, b] of [[-1.9, -1.9], [1.9, -1.9], [-1.9, 1.9], [1.9, 1.9]]) cyl(g, .07, .07, .45, C.wood, a, 0, b, 5); return; }
+      const l = SV.b[k], busy = SV.job && SV.job.k === k;
+      if (l > 0) { const m = new T3.Group(); m.scale.setScalar(.92); g.add(m); MODEL[k](m, tierOf(l)); } else box(g, 3, .2, 2.4, C.stone);
+      if (busy) { for (const [a, b] of [[-1.9, -1.6], [1.9, -1.6], [-1.9, 1.6], [1.9, 1.6]]) cyl(g, .07, .07, 3, C.wood, a, 0, b, 5); for (const y of [1.2, 2.4]) { box(g, 3.9, .08, .08, C.wood, 0, y, 1.6); box(g, 3.9, .08, .08, C.wood, 0, y, -1.6); box(g, .08, .08, 3.3, C.wood, 1.9, y, 0); box(g, .08, .08, 3.3, C.wood, -1.9, y, 0); } }
+    });
+    const wl = SV.b.dike;
+    if (wl > 0) { const t = tierOf(wl); cityWall(GL.vg, t, VW);
+      if (t === 3) for (let i = 0; i < 6; i++) { const p = soldier(new T3.Group(), C.red, 0); p.userData.o = i/6; GL.vg.add(p); GL.patrols.push(p); } }
+  }
+  GL.ring.visible = selPlot !== null && $('dorp').classList.contains('on');
+  if (selPlot !== null) GL.ring.position.set(PPOS[selPlot][0], plotY(selPlot) + .2, PPOS[selPlot][1]);
+}
+function fitCam(cam, hw, hh) { cam.left = -hw; cam.right = hw; cam.top = hh; cam.bottom = -hh; cam.updateProjectionMatrix(); }
+function mapRect(force) { const on = force || $('dorp').classList.contains('on'), r = on ? $('map').getBoundingClientRect() : { left:0, top:0, width:innerWidth, height:innerHeight, bottom:innerHeight }; return r.width > 10 && r.height > 10 ? r : { left:0, top:0, width:innerWidth, height:innerHeight, bottom:innerHeight }; }
+function villageCam(force) { const r = mapRect(force), a = r.width/r.height, hw = Math.max(15.4, 13*a); fitCam(GL.vc, hw, hw/a); GL.vc.position.set(0, 36, 30); GL.vc.lookAt(0, 0, -1); GL.vc.updateMatrixWorld(); return r; }
+function placePlots() { // de tikbare knoppen op de plek van elk gebouw leggen
+  const els = document.querySelectorAll('#map .plot'); if (!els.length) return;
+  if (!GL.ok) { els.forEach(e => { const p = PLOTS[+e.dataset.i]; e.style.left = p[0] + '%'; e.style.top = p[1] + '%'; }); return; }
+  const r = villageCam(true), v = new T3.Vector3(); GL.pr = Math.round(r.width) + 'x' + Math.round(r.height);
+  els.forEach(e => { const i = +e.dataset.i; v.set(PPOS[i][0], plotY(i) + .6, PPOS[i][1]).project(GL.vc); e.style.left = ((v.x + 1)/2*r.width) + 'px'; e.style.top = ((1 - v.y)/2*r.height) + 'px'; });
+}
+
+// --- slagveld ---
+const RZ = d => 11.5 - d/500*23;
+function unitMesh(e) {
+  const g = new T3.Group();
+  if (e.side === 0) {
+    if (e.k === 't') { soldier(g, C.red, 0); box(g, .5, .62, .08, C.red, 0, .15, -.3); box(g, .16, .16, .1, C.gold, 0, .38, -.31); }
+    else if (e.k === 'a') { soldier(g, '#4d7a3a', 1); const b = add(g, geo('bow', () => new T3.TorusGeometry(.32, .03, 4, 8, Math.PI)), C.wood, .3, .55, -.1); b.rotation.set(0, Math.PI/2, Math.PI/2); }
+    else { const l = cyl(g, .2, .2, 1.5, C.wood, 0, .35, 0, 7); l.rotation.x = Math.PI/2; const t = add(g, geo('ram', () => new T3.ConeGeometry(.24, .4, 6)), C.iron, 0, .55, -.9); t.rotation.x = -Math.PI/2; box(g, .9, .1, 1.3, C.dark, 0, .95, .1); for (const [x, z] of [[-.4, -.4], [.4, -.4], [-.4, .5], [.4, .5]]) { const w = cyl(g, .2, .2, .1, C.dark, x, 0, z, 8); w.rotation.z = Math.PI/2; cyl(g, .04, .04, .8, C.wood, x, .2, z, 4); } }
+  } else if (e.k === 'k') { soldier(g, C.blue, 2); cyl(g, .03, .03, 1.5, C.wood, .3, 0, .15, 4); const s = cyl(g, .26, .26, .06, C.iron, 0, .2, .3); s.rotation.x = Math.PI/2; }
+  else if (e.k === 'm') { box(g, .22, .18, .5, '#6b4a2b', 0, 0, 0); sph(g, .13, C.marble, 0, .12, .3); g.userData.w = [box(g, .7, .05, .32, '#5a3c22', -.42, .08, 0), box(g, .7, .05, .32, '#5a3c22', .42, .08, 0)]; }
+  else if (e.k === 'w') { cyl(g, .75, .85, 1.5, C.stone); cyl(g, .9, .8, .2, C.stone, 0, 1.5, 0); for (let i = 0; i < 6; i++) box(g, .25, .22, .25, C.stone, Math.cos(i*1.047)*.8, 1.7, Math.sin(i*1.047)*.8); box(g, 1.1, .1, .12, C.wood, 0, 1.9, .2); box(g, .14, .14, 1, C.wood, 0, 1.85, .1); }
+  else { box(g, 1.3, .35, 1.3, C.stone); box(g, 1, .2, 1, C.marble, 0, .35, 0); cyl(g, .05, .05, 2.2, C.gold, 0, .55, 0, 5); box(g, .7, .7, .06, C.red, .37, 1.9, 0); box(g, .5, .12, .1, C.gold, 0, 2.75, 0); sph(g, .13, C.gold, 0, 2.9, 0); }
+  const bar = new T3.Mesh(geo('b', () => new T3.BoxGeometry(1, 1, 1)), new T3.MeshBasicMaterial({ color:e.side ? '#e03131' : '#37b24d' })); bar.scale.set(.9, .1, .1); bar.position.y = e.k === 'n' ? 3.3 : e.k === 'w' ? 2.4 : 1.5; bar.visible = false; g.add(bar); g.userData.bar = bar;
+  return g;
+}
+function raidScene(tg) {
+  GL.rs.remove(GL.rg); GL.rg = new T3.Group(); GL.rs.add(GL.rg); GL.fog = [];
+  const t = tierOf(tg.wl || 0); // de muur van de verdediger laat zien hoe ver die is
+  if ((tg.wl || 0) > 0 || tg.bot) { wallRun(GL.rg, -14, -13.6, 14, -13.6, t); if (t >= 2) for (const x of [-6, -2, 2, 6]) { box(GL.rg, 1.5, 3, 1.5, t === 3 ? C.marble : C.stone, x, 0, -13.6); if (t === 3) roof(GL.rg, 1.7, .9, 1.7, C.tile, x, 3, -13.6); } }
+  for (let i = 0; i < 3; i++) { const f = new T3.Mesh(geo('b', () => new T3.BoxGeometry(1, 1, 1)), new T3.MeshBasicMaterial({ color:'#dfe6ea', transparent:true, opacity:.82 })); GL.rg.add(f); GL.fog.push(f); }
+}
+function syncRaid(t) {
+  const vis = [R.sight, R.sight, R.sight];
+  for (const e of R.ents) if (e.side === 0 && e.hp > 0) vis[e.lane] = Math.max(vis[e.lane], e.d + 130);
+  let n = 0;
+  for (const e of R.ents) {
+    n++; if (!e.m) { e.m = unitMesh(e); if (e.side) e.m.rotation.y = 0; else e.m.rotation.y = 0; GL.rg.add(e.m); }
+    const m = e.m, laneDone = R.nest[e.lane].hp <= 0;
+    if (e.hp <= 0) { if (e.k === 'n') { m.rotation.z = 1.2; m.position.set((e.lane - 1)*4 + .6, .4, RZ(500)); m.userData.bar.visible = false; } else m.visible = false; continue; }
+    if (e.side && e.k !== 'n' && (laneDone || e.d > vis[e.lane])) { m.visible = false; continue; }
+    m.visible = true;
+    const walk = !e.def.st && !(e.hit && R.t - e.hit < .2), hitting = e.hit && R.t - e.hit < .12;
+    m.position.set((e.lane - 1)*4 + (e.k === 'n' ? 0 : (n % 3 - 1)*.75), e.def.fly ? 1.7 + Math.sin(t*5 + n)*.2 : walk ? Math.abs(Math.sin(t*9 + n))*.08 : 0, RZ(e.d) + (hitting ? (e.side ? .18 : -.18) : 0));
+    if (m.userData.w) { m.userData.w[0].rotation.z = Math.sin(t*12 + n)*.6; m.userData.w[1].rotation.z = -Math.sin(t*12 + n)*.6; }
+    const b = m.userData.bar; b.visible = e.hp < e.max; b.scale.x = .9*Math.max(.02, e.hp/e.max);
+  }
+  for (let i = 0; i < 3; i++) { const f = GL.fog[i], on = R.nest[i].hp > 0 && vis[i] < 465; f.visible = on; if (on) { const z1 = RZ(480), z2 = RZ(vis[i]); f.position.set((i - 1)*4, 1, (z1 + z2)/2); f.scale.set(3, 2, Math.abs(z2 - z1)); } }
+  const left = Math.max(0, Math.ceil(R.time - R.t)), key = left + '|' + R.stars + '|' + R.sent;
+  if (key !== GL.hud) { GL.hud = key; $('rhN').textContent = (R.tg.bot ? '🤖 ' : '🏛️ ') + R.tg.name + '  ' + '⭐'.repeat(R.stars); $('rhT').textContent = '⏳ ' + left + ' s'; $('rhH').style.display = R.sent ? 'none' : ''; }
+  $('rhB').style.width = (clamp(R.t/R.time, 0, 1)*100) + '%'; $('rhB').style.background = R.t/R.time > .75 ? '#e03131' : '#e0a13a';
+}
+function render3D(t) {
+  if (!GL.ok) return;
+  const r = GL.r, raid = G.mode === 'raid' || G.mode === 'raidEnd';
+  if (!raid && G.mode !== 'dorp') return; // tijdens een veldtocht ligt het 2D-doek erover
+  r.setScissorTest(false); r.setViewport(0, 0, innerWidth, innerHeight);
+  if (raid) {
+    const a = innerWidth/innerHeight, hw = Math.max(6, 15.5*a); GL.rhw = hw; fitCam(GL.rc, hw, hw/a); syncRaid(t); r.render(GL.rs, GL.rc); return;
+  }
+  syncVillage(); const rc = villageCam();
+  if ($('dorp').classList.contains('on') && GL.pr !== Math.round(rc.width) + 'x' + Math.round(rc.height)) placePlots();
+  for (const f of GL.fires) { const k = f.scale.x; f.scale.y = k*(1 + Math.sin(t*11 + f.position.x*3)*.22); }
+  GL.patrols.forEach(p => { const u = (t*.02 + p.userData.o) % 1, s = u*4, i = Math.floor(s), f = s - i, c = [[-VW, -VW], [VW, -VW], [VW, VW], [-VW, VW]], a = c[i], b = c[(i + 1) % 4]; p.position.set(a[0] + (b[0] - a[0])*f, 2.3 + Math.abs(Math.sin(t*8 + i))*.05, a[1] + (b[1] - a[1])*f); });
+  if (rc.width < innerWidth - 2 || rc.height < innerHeight - 2) { r.setClearColor('#14283c', 1); r.clear(); r.setScissorTest(true); r.setScissor(rc.left, innerHeight - rc.bottom, rc.width, rc.height); r.setViewport(rc.left, innerHeight - rc.bottom, rc.width, rc.height); }
+  r.render(GL.vs, GL.vc);
+}
+
 /* ===================== Tekenen ===================== */
 const cv = $('c'), ctx = cv.getContext('2d');
 let W = 420, H = 640, S = 1, OY = 0;
@@ -795,7 +1041,7 @@ function resize() {
   cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
   const s = Math.min(h/640, w/420); S = s*dpr; W = w/s; H = h/s; OY = H*.72 - 540;
 }
-addEventListener('resize', resize); resize();
+addEventListener('resize', () => { resize(); if (GL.ok) { GL.r.setSize(innerWidth, innerHeight, false); placePlots(); } }); resize();
 
 // Dezelfde munt (🪙) en parel (⚪) als in het dorp en de winkel, één keer voorgetekend.
 function sprite(ch) { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); x.font = '48px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(ch, 32, 35); return c; }
@@ -813,13 +1059,11 @@ function drawBg(cam) {
   ctx.fillStyle = '#7fbf7f'; ctx.beginPath(); ctx.moveTo(0, H);
   for (let x = 0; x <= W + 16; x += 16) { const wx = x + cam*.2; ctx.lineTo(x, OY + 440 + Math.sin(wx*.006)*26 + Math.sin(wx*.017)*10); }
   ctx.lineTo(W, H); ctx.fill();
-  const sp = 520, off = cam*.35, i0 = Math.floor(off/sp);
-  for (let i = i0; i <= i0 + Math.ceil(W/sp) + 1; i++) { // molens
-    const x = i*sp - off + 120, y = OY + 455;
-    ctx.fillStyle = '#6b4f3a'; ctx.beginPath(); ctx.moveTo(x - 14, y); ctx.lineTo(x - 8, y - 60); ctx.lineTo(x + 8, y - 60); ctx.lineTo(x + 14, y); ctx.fill();
-    ctx.save(); ctx.translate(x, y - 58); ctx.rotate(G.t*.8 + i); ctx.fillStyle = '#f4ead5';
-    for (let k = 0; k < 4; k++) { ctx.rotate(Math.PI/2); ctx.fillRect(-3, 0, 6, 44); ctx.fillRect(3, 10, 8, 32); }
-    ctx.restore();
+  const sp = 260, off = cam*.35, i0 = Math.floor(off/sp);
+  for (let i = i0; i <= i0 + Math.ceil(W/sp) + 1; i++) { // cipressen en een zuil
+    const x = i*sp - off + 120, y = OY + 458;
+    if (i % 3 === 0) { ctx.fillStyle = '#e9e2d0'; ctx.fillRect(x - 5, y - 52, 10, 52); ctx.fillRect(x - 9, y - 56, 18, 5); ctx.fillRect(x - 8, y - 3, 16, 4); }
+    else { ctx.fillStyle = '#5b4030'; ctx.fillRect(x - 2, y - 10, 4, 12); ctx.fillStyle = '#2f5d34'; ctx.beginPath(); ctx.ellipse(x, y - 38, 9, 32, 0, 0, 7); ctx.fill(); }
   }
   ctx.fillStyle = '#5da35d'; ctx.beginPath(); ctx.moveTo(0, H);
   for (let x = 0; x <= W + 16; x += 16) { const wx = x + cam*.35; ctx.lineTo(x, OY + 470 + Math.sin(wx*.009 + 2)*16); }
@@ -834,17 +1078,17 @@ function drawHero(x, y, p) {
   if (p.inv > 0 && Math.floor(G.t*14) % 2) return;
   if (p.duck) { // gebukt: plat tegen de grond
     ctx.fillStyle = '#28435e'; ctx.fillRect(x - 2, y + 34, 8, 6);
-    ctx.fillStyle = '#ffc928'; rr(x, y + 24, 22, 16, 6); ctx.fill();
+    ctx.fillStyle = '#b3261e'; rr(x, y + 24, 22, 16, 6); ctx.fill();
     ctx.fillStyle = '#f3c9a5'; rr(x + 14, y + 23, 15, 12, 5); ctx.fill();
-    ctx.fillStyle = '#e0a800'; rr(x + 11, y + 20, 21, 6, 3); ctx.fill();
+    ctx.fillStyle = '#aeb6c2'; rr(x + 11, y + 20, 21, 6, 3); ctx.fill();
     ctx.fillStyle = '#10263b'; ctx.fillRect(x + 24, y + 28, 3, 3);
     return;
   }
   const run = p.ground ? Math.sin(G.t*18) : .6;
   ctx.fillStyle = '#28435e'; ctx.fillRect(x + 5 + run*4, y + 31, 6, 9); ctx.fillRect(x + 15 - run*4, y + 31, 6, 9);
-  ctx.fillStyle = '#ffc928'; rr(x + 1, y + 13, 24, 21, 6); ctx.fill();
+  ctx.fillStyle = '#b3261e'; rr(x + 1, y + 13, 24, 21, 6); ctx.fill();
   ctx.fillStyle = '#f3c9a5'; rr(x + 5, y + 3, 18, 14, 6); ctx.fill();
-  ctx.fillStyle = '#e0a800'; rr(x - 1, y + 2, 26, 6, 3); ctx.fill(); rr(x + 4, y - 3, 17, 8, 5); ctx.fill();
+  ctx.fillStyle = '#aeb6c2'; rr(x - 1, y + 2, 26, 6, 3); ctx.fill(); rr(x + 4, y - 3, 17, 8, 5); ctx.fill();
   ctx.fillStyle = '#10263b'; ctx.fillRect(x + 18, y + 9, 3, 3);
 }
 function drawFoe(f, cam) {
@@ -912,17 +1156,17 @@ function drawWorld(cam) {
   const wx = G.floodX - cam; // vloedgolf
   if (wx > -30) {
     const edge = y => wx + Math.sin(y*.035 + G.t*5)*9 + Math.sin(y*.011 - G.t*2)*8;
-    ctx.fillStyle = 'rgba(28,104,184,.86)'; ctx.beginPath(); ctx.moveTo(-10, 0);
+    ctx.fillStyle = 'rgba(214,72,20,.9)'; ctx.beginPath(); ctx.moveTo(-10, 0);
     for (let y = 0; y <= H + 14; y += 14) ctx.lineTo(edge(y), y);
     ctx.lineTo(-10, H); ctx.fill();
-    ctx.strokeStyle = '#eaf6ff'; ctx.lineWidth = 4; ctx.beginPath();
+    ctx.strokeStyle = '#ffd27a'; ctx.lineWidth = 4; ctx.beginPath();
     for (let y = 0; y <= H + 14; y += 14) ctx.lineTo(edge(y), y);
     ctx.stroke();
   }
 }
 function drawHud() {
   const p = G.p, dist = p.x - G.floodX, danger = clamp(1 - (dist - 60)/(G.fMax - 60), 0, 1);
-  if (danger > .35) { ctx.fillStyle = `rgba(28,104,184,${(danger - .35)*.9*(.7 + .3*Math.sin(G.t*10))})`; ctx.fillRect(0, 0, 14 + danger*26, H); }
+  if (danger > .35) { ctx.fillStyle = `rgba(214,72,20,${(danger - .35)*.9*(.7 + .3*Math.sin(G.t*10))})`; ctx.fillRect(0, 0, 14 + danger*26, H); }
   const bx = 16, bw = W - 32, by = 18;
   ctx.textBaseline = 'middle';
   if (G.n === 0) { // oneindig: afstand i.p.v. voortgang
@@ -932,26 +1176,27 @@ function drawHud() {
   } else { // voortgangsbalk = de vloedklok
     const k = v => bx + clamp(v/G.flagX, 0, 1)*bw;
     ctx.fillStyle = '#0b1c2c99'; rr(bx - 4, by - 4, bw + 8, 18, 9); ctx.fill();
-    ctx.fillStyle = '#2b7fc4'; rr(bx, by, Math.max(4, k(G.floodX) - bx), 10, 5); ctx.fill();
-    ctx.fillStyle = '#ffc928'; ctx.beginPath(); ctx.arc(k(p.x), by + 5, 7, 0, 7); ctx.fill();
-    ctx.font = '16px system-ui'; ctx.textAlign = 'right'; ctx.fillText('🔔', bx + bw + 6, by + 5);
+    ctx.fillStyle = '#d64814'; rr(bx, by, Math.max(4, k(G.floodX) - bx), 10, 5); ctx.fill();
+    ctx.fillStyle = '#b3261e'; ctx.beginPath(); ctx.arc(k(p.x), by + 5, 7, 0, 7); ctx.fill();
+    ctx.font = '16px system-ui'; ctx.textAlign = 'right'; ctx.fillText('🏛️', bx + bw + 6, by + 5);
   }
   ctx.textAlign = 'left'; ctx.font = '18px system-ui'; let hs = ''; for (let i = 0; i < G.hearts; i++) hs += '❤️'; ctx.fillText(hs, 14, 54);
   ctx.font = 'bold 18px system-ui'; ctx.textAlign = 'right'; ctx.fillStyle = '#10263b';
   ctx.fillText(`🪙 ${G.gold}   ⚪ ${G.pearls}`, W - 14, 54);
   ctx.textAlign = 'center';
-  if (G.n) { ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#10263bcc'; ctx.fillText('Expeditie ' + G.n, W/2, 54); }
+  if (G.n) { ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#10263bcc'; ctx.fillText('Veldtocht ' + G.n, W/2, 54); }
   if (G.n <= 1 && G.t < 7 && G.mode === 'play') {
     ctx.fillStyle = '#0b1c2ccc'; rr(W/2 - 175, OY + 185, 350, 80, 12); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.font = 'bold 15px system-ui'; ctx.fillText('Tik = springen · vasthouden = hoger', W/2, OY + 204);
-    ctx.fillText('Veeg omlaag = bukken onder sluisdeuren', W/2, OY + 226);
-    ctx.font = '14px system-ui'; ctx.fillText('Tik in de lucht = dubbelsprong · spring op krabben', W/2, OY + 248);
+    ctx.fillText('Veeg omlaag = bukken onder valhekken', W/2, OY + 226);
+    ctx.font = '14px system-ui'; ctx.fillText('Tik in de lucht = dubbelsprong · blijf de lava voor', W/2, OY + 248);
   }
   if (p.stall > .15 && Math.floor(G.t*6) % 2) { ctx.fillStyle = '#c92a2a'; ctx.font = 'bold 22px system-ui'; ctx.fillText(p.gateStall ? 'BUK!  ↓ veeg omlaag' : 'SPRING!', W/2, OY + 300); }
 }
 function draw() {
   ctx.setTransform(S, 0, 0, S, 0, 0);
-  if (G.mode === 'raid' || G.mode === 'raidEnd') return drawRaid();
+  if (G.mode === 'raid' || G.mode === 'raidEnd') return GL.ok ? null : drawRaid();
+  if (GL.ok && G.mode === 'dorp') return;
   if (G.mode === 'dorp') { drawBg(G.bgX); ctx.fillStyle = '#2b7fc4'; ctx.fillRect(0, OY + 520, W, H); return; }
   const cam = G.p.x - W*.25;
   drawBg(cam); drawWorld(cam); drawHud();
@@ -964,10 +1209,11 @@ function frame(t) {
   if (G.mode === 'play') { acc += dt; while (acc >= STEP && G.mode === 'play') { step(); acc -= STEP; } }
   else if (G.mode === 'raid') { acc += dt; while (acc >= 1/60 && G.mode === 'raid') { raidStep(1/60); acc -= 1/60; } }
   else { acc = 0; G.t += dt; G.bgX += dt*25; }
-  draw(); requestAnimationFrame(frame);
+  draw(); render3D(t/1000); requestAnimationFrame(frame);
 }
 // Eén duim: tik = springen, vasthouden = hoger, omlaag vegen (en vasthouden) = bukken.
 let pid = null, py0 = 0;
+$('gl').addEventListener('pointerdown', e => { if (G.mode !== 'raid') return; e.preventDefault(); audioInit(); deploy(clamp(Math.round((e.clientX/innerWidth*2 - 1)*GL.rhw/4) + 1, 0, 2)); });
 cv.addEventListener('pointerdown', e => { e.preventDefault(); audioInit(); if (G.mode === 'raid') return deploy(clamp(Math.floor(e.clientX/innerWidth*3), 0, 2)); pid = e.pointerId; py0 = e.clientY; press(); });
 addEventListener('pointermove', e => { if (e.pointerId === pid && e.clientY - py0 > 22) duckOn(); });
 function up(e) { if (e.pointerId !== pid) return; pid = null; duckOff(); release(); }
@@ -980,8 +1226,8 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp') release(); else if (e.code === 'ArrowDown' || e.code === 'KeyS') duckOff(); });
 addEventListener('contextmenu', e => e.preventDefault());
 
-window.VK = { G, get SV() { return SV; }, start, step, press, release, duckOn, duckOff, genLevel, genRaid, missing, buildSecs, tickJob, goldCap, botDef, layout, NET, curTarget, startRaid, deploy, raidStep, endRaid, get R() { return R; } };
-tickJob(); goDorp(); requestAnimationFrame(frame); netInit();
+window.VK = { G, get SV() { return SV; }, start, step, press, release, duckOn, duckOff, GL, genLevel, genRaid, cost, tierOf, missing, buildSecs, tickJob, goldCap, botDef, layout, NET, curTarget, startRaid, deploy, raidStep, endRaid, get R() { return R; } };
+initGL(); tickJob(); goDorp(); requestAnimationFrame(frame); netInit();
 </script>
 </body>
 </html>
