@@ -5,10 +5,11 @@ One-thumb mobiele platformer met een dorp-upgradelaag. Eén bestand, geen build,
 - **Spelen:** open `index.html` in een (mobiele) browser.
 - **Besturing:** tik = springen, vasthouden = hoger, tik in de lucht = dubbelsprong, omlaag vegen (en vasthouden) = bukken. Op desktop: spatie en pijl omlaag.
 - **Doel:** blijf de vloedgolf voor en luid de klok aan het eind van elke expeditie.
-- **Dorp:** kaart met zes bouwplaatsen voor Goudmijn (passief goud, ook offline), Dijk, Vuurtoren, Herberg en Werkplaats.
-- **Terrein:** elke bouwplaats is kust, heuvel of centrum; een gebouw op zijn voorkeursterrein krijgt een bonus. Verplaatsen/ruilen kost goud.
-- **Leger & strooptochten:** train wachters in de Kazerne (Dijkwerker, Boogschutter, Sloper) en zet ze in op drie paden van een vijandig eiland voordat de vloed komt. 2 van 3 nesten = volgend eiland. Herberg, Werkplaats, Dijk en Vuurtoren versterken het leger.
-- **Oneindig:** eindeloze expeditie die steeds sneller gaat; je record wordt bewaard.
-- **Winkel:** diamanten besteden aan goud, parels en een tweede kans. Echte betalingen zijn **niet** gekoppeld: `PAY.buy` in `index.html` is de plek om Play Billing / StoreKit / Stripe aan te sluiten. Met `?dev=1` worden aankopen gesimuleerd.
+- **Kern:** bouw je dorp, train wachters en val dorpen van andere spelers aan (3 paden, 2 van 3 nesten = winst, bekers als ranglijst). Expedities (de platformer) zijn de manier om goud te verdienen.
+- **Dorp:** kaart met negen bouwplaatsen (kust/heuvel/centrum, bonus op voorkeursterrein). Gebouwen: Stadhuis, Bank, Goudmijn, Kazerne, Boogschutterskamp, Muur, Vuurtoren, Herberg, Werkplaats.
+- **Bouwen:** elke bouw/upgrade kost tijd (15 s tot 80 min, oplopend per niveau), één bouwer tegelijk. Niets kan hoger dan het Stadhuis; Stadhuis en Muur vragen bepaalde niveaus van Bank, Goudmijn en Kazerne.
+- **Verdediging:** verdeel verdedigingspunten (uit de Muur) over je drie paden.
+- **Andere spelers:** werkt alleen in de gepubliceerde Claude-pagina (gedeelde database via `claude.use('db')`). Lokaal geopend vecht je tegen computerdorpen. De client is niet te vertrouwen: zonder eigen server is valsspelen mogelijk.
+- **Winkel:** diamanten besteden aan goud, parels, een tweede kans en het afmaken van bouwklussen. Echte betalingen zijn **niet** gekoppeld (`PAY.buy`). Met `?dev=1` worden aankopen gesimuleerd.
 
 Levels zijn deterministisch per nummer gegenereerd. Voortgang staat in `localStorage` (`vloedklok.v1`).

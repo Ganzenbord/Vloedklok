@@ -32,12 +32,14 @@
   #raid { justify-content:flex-end; pointer-events:none; }
   #raid .bar { pointer-events:auto; width:100%; max-width:460px; }
   #raid .bar button { flex:1; font-size:17px; min-height:58px; }
+  .chip { min-height:44px; min-width:44px; padding:4px 8px; font-size:20px; background:#fff; color:var(--ink); border:2px solid #d8cfb4; box-shadow:none; }
+  input.nm { font:inherit; font-weight:700; width:100%; min-height:44px; border-radius:10px; border:2px solid #d8cfb4; padding:6px 10px; background:#fff; color:var(--ink); -webkit-user-select:text; user-select:text; }
   .ok { color:#2b8a3e; font-weight:700; } .nok { color:#a15c00; }
 
   /* dorpskaart met bouwplaatsen */
-  .map { position:relative; flex:1; min-height:230px; border-radius:18px; overflow:hidden; background:#2b7fc4; box-shadow:0 3px 0 #0004; }
+  .map { position:relative; flex:1; min-height:310px; border-radius:18px; overflow:hidden; background:#2b7fc4; box-shadow:0 3px 0 #0004; }
   .map svg { position:absolute; inset:0; width:100%; height:100%; }
-  .plot { position:absolute; transform:translate(-50%,-50%); width:64px; height:64px; min-height:0; padding:0; border-radius:50%;
+  .plot { position:absolute; transform:translate(-50%,-50%); width:58px; height:58px; min-height:0; padding:0; border-radius:50%;
     font-size:30px; line-height:1; box-shadow:0 4px 0 #0004; }
   .plot:active { transform:translate(-50%,-48%); }
   .plot.empty { background:#ffffff40; border:3px dashed #fff; color:#fff; font-size:28px; }
@@ -51,7 +53,7 @@
   @keyframes bob { to { margin-top:-5px; } }
   @media (prefers-reduced-motion: reduce) { .plot .bub { animation:none; } }
 
-  .sheet { background:var(--panel); border-radius:14px; padding:10px 12px; min-height:84px; max-height:34vh; overflow-y:auto; touch-action:pan-y;
+  .sheet { background:var(--panel); border-radius:14px; padding:10px 12px; min-height:84px; max-height:24vh; overflow-y:auto; touch-action:pan-y;
     display:flex; flex-direction:column; gap:8px; box-shadow:0 3px 0 #0004; }
   .row { display:flex; align-items:center; gap:10px; }
   .row .ico { font-size:28px; width:36px; text-align:center; }
@@ -80,17 +82,16 @@
   <div class="wrap">
     <div class="top">
       <h1>VLOEDKLOK</h1>
-      <button class="ghost" data-act="leger" style="background:#a61e4d">⚔️ Leger</button>
-      <button class="gem" data-act="shop">🛒 Winkel</button>
+      <button class="ghost" data-act="verd">🛡️ Verdediging</button>
+      <button class="gem" data-act="shop" aria-label="Winkel">🛒</button>
       <button class="ghost" data-act="mute" id="muteBtn" aria-label="Geluid"></button>
     </div>
     <div class="res" id="res"></div>
     <div class="map" id="map"></div>
     <div class="sheet" id="sheet"></div>
     <div class="bar">
-      <button class="sq ghost" data-act="prev" aria-label="Vorige expeditie">‹</button>
-      <button class="big" data-act="play" id="playBtn"></button>
-      <button class="sq ghost" data-act="next" aria-label="Volgende expeditie">›</button>
+      <button class="big" data-act="leger" style="background:#a61e4d">⚔️ Aanvallen</button>
+      <button class="ghost" data-act="play" id="playBtn" style="font-size:13px;line-height:1.2"></button>
       <button class="ghost" data-act="endless" id="endBtn" style="font-size:13px;line-height:1.2"></button>
     </div>
   </div>
@@ -106,14 +107,21 @@
 
 <div id="leger" class="screen" style="background:rgba(16,38,59,.55)">
   <div class="wrap">
-    <div class="top"><h1>LEGER</h1><button class="ghost" data-act="home">✕ Dorp</button></div>
+    <div class="top"><h1>AANVAL</h1><button class="ghost" data-act="home">✕ Dorp</button></div>
     <div class="res" id="res3"></div>
     <div class="list" id="armyList"></div>
     <div class="bar">
-      <button class="sq ghost" data-act="rprev" aria-label="Vorig eiland">‹</button>
+      <button class="ghost" data-act="rnext" style="font-size:14px">↻ Ander<br>dorp</button>
       <button class="big" data-act="raid" id="raidBtn" style="background:#a61e4d"></button>
-      <button class="sq ghost" data-act="rnext" aria-label="Volgend eiland">›</button>
     </div>
+  </div>
+</div>
+
+<div id="verd" class="screen" style="background:rgba(16,38,59,.55)">
+  <div class="wrap">
+    <div class="top"><h1>VERDEDIGING</h1><button class="ghost" data-act="home">✕ Dorp</button></div>
+    <div class="res" id="res4"></div>
+    <div class="list" id="defList"></div>
   </div>
 </div>
 
@@ -136,14 +144,14 @@
 /* ===================== Opslag ===================== */
 const KEY = 'vloedklok.v1';
 const DEV = /[?&]dev=1/.test(location.search);
-const DEF = { gold:0, pearls:0, diamonds:0, max:1, sel:1, best:0, b:{inn:0,shop:0,dike:0,light:0,mine:0,bar:0},
-  army:{t:0,a:0,s:0}, raid:1, raidSel:1, plots:[null,null,null,null,null,null], mineT:Date.now(), mute:false };
+const DEF = { gold:0, pearls:0, diamonds:0, max:1, sel:1, best:0, b:{hall:1,inn:0,shop:0,dike:0,light:0,mine:0,bar:0,arch:0,bank:0}, job:null,
+  army:{t:0,a:0,s:0}, tr:0, def:[['k'],['k'],['k','k']], name:'Dorp-' + Math.floor(1000 + Math.random()*9000), seen:0, log:[], plots:[null,null,null,null,null,null,'hall',null,null], mineT:Date.now(), mute:false };
 function loadSave() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
   const v = JSON.parse(JSON.stringify(DEF));
-  if (s && s.b) { Object.assign(v, s); v.b = Object.assign({}, DEF.b, s.b); v.army = Object.assign({}, DEF.army, s.army); v.plots = (s.plots || DEF.plots).slice(0, 6); while (v.plots.length < 6) v.plots.push(null); }
-  for (const k in v.b) if (v.b[k] > 0 && !v.plots.includes(k)) { const i = v.plots.indexOf(null); if (i >= 0) v.plots[i] = k; } // oude saves een plek geven
+  if (s && s.b) { Object.assign(v, s); v.b = Object.assign({}, DEF.b, s.b); v.army = Object.assign({}, DEF.army, s.army); v.plots = (s.plots || DEF.plots).slice(0, 9); while (v.plots.length < 9) v.plots.push(null); v.b.hall = Math.max(1, v.b.hall); }
+  for (const k in v.b) if (v.b[k] > 0 && !v.plots.includes(k)) { let i = k === 'hall' && !v.plots[6] ? 6 : v.plots.indexOf(null); if (i >= 0) v.plots[i] = k; } // oude saves een plek geven
   return v;
 }
 let SV = loadSave();
@@ -153,25 +161,51 @@ function save() { try { localStorage.setItem(KEY, JSON.stringify(SV)); } catch (
 const MAGNET = [0, 70, 110, 150];
 // c = kosten per niveau: [goud, parels]
 const BLD = {
+  hall:  { n:'Stadhuis',   i:'🏛️', likes:'centrum', bonus:'10% kortere bouwtijd', d:l => `Andere gebouwen kunnen tot niveau ${l}`, c:[[0,0],[400,1],[1200,4],[3000,8]] },
+  bank:  { n:'Bank',       i:'🏦', likes:'centrum', bonus:'+25% opslag', d:l => `Goudopslag ${GCAP[l]}`, c:[[100,0],[400,1],[1000,3]] },
+  arch:  { n:'Boogschutterskamp', i:'🎯', likes:'heuvel', bonus:'boogschutters +10% schade', d:l => l ? `Train Boogschutters · +${2*l} legerplekken${l > 1 ? ` · +${(l-1)*10}% schade` : ''}` : 'Train Boogschutters, vergroot je leger', c:[[150,0],[400,2],[900,4]] },
   mine:  { n:'Goudmijn',   i:'⛏️', likes:'heuvel', bonus:'+25% goud', d:l => l ? `Delft ${l*8} goud/min (opslag ${l*240})` : 'Delft goud, ook als je weg bent', c:[[80,0],[250,1],[600,3],[1300,6]] },
   bar:   { n:'Kazerne',    i:'🏰', likes:'centrum', bonus:'+2 wachters', d:l => l ? `Leger van ${CAP[l]} wachters${l >= 2 ? ', Slopers beschikbaar' : ' (Slopers vanaf niveau 2)'}` : 'Train wachters voor strooptochten', c:[[120,0],[350,2],[800,4],[1500,7]] },
-  dike:  { n:'Dijk',       i:'🧱', likes:'kust', bonus:'vloed 2% trager, +5 s strooptocht', d:l => l ? `Vloed ${l*4}% trager · strooptocht +${l*5} s` : 'Remt de vloed af, geeft strooptochten meer tijd', c:[[120,0],[300,1],[650,3],[1200,6]] },
+  dike:  { n:'Muur',       i:'🧱', likes:'kust', bonus:'+1 verdedigingspunt, vloed 2% trager', d:l => l ? `${4 + 2*l} verdedigingspunten${l >= 2 ? ', torens' : l >= 1 ? ', meeuwen' : ''} · vloed ${l*4}% trager · aanval +${l*5} s` : 'Meer verdedigers voor je dorp, remt de vloed af', c:[[120,0],[300,1],[650,3],[1200,6]] },
   light: { n:'Vuurtoren',  i:'🗼', likes:'kust', bonus:'+20 bereik, verder zicht', d:l => l ? `Trekt munten aan (bereik ${MAGNET[l]}) · verkent vijandige paden` : 'Trekt munten aan, verkent vijandige eilanden', c:[[100,0],[350,2],[800,4]] },
   inn:   { n:'Herberg',    i:'🏠', likes:'centrum', bonus:'+1 leven', d:l => `${3+l} levens per expeditie · wachters +${l*15}% leven`, c:[[150,0],[400,2],[900,5]] },
   shop:  { n:'Werkplaats', i:'🥾', likes:'heuvel', bonus:'wachters +10% schade', d:l => `${1+l}× springen in de lucht · wachters +${l*15}% schade`, c:[[300,3],[800,8]] },
 };
 const CAP = [0, 5, 8, 11, 14]; // legergrootte per Kazerne-niveau
+const GCAP = [800, 2000, 4000, 8000]; // goudopslag per Bank-niveau
+const goldCap = () => Math.round(GCAP[SV.b.bank]*(bonus('bank') ? 1.25 : 1));
+// Goud erbij, begrensd door de opslag. Geeft terug hoeveel er echt bij kwam.
+function addGold(n) { const g0 = SV.gold; SV.gold = Math.max(g0, Math.min(goldCap(), g0 + n)); return SV.gold - g0; }
+// Vereisten: niets mag hoger dan het Stadhuis; het Stadhuis en de Muur vragen zelf andere gebouwen.
+const HALLREQ = { 2:{ mine:1, bank:1 }, 3:{ mine:2, bank:2, bar:2 }, 4:{ mine:3, bank:3, dike:3 } };
+const EXREQ = { dike:{ 3:{ bank:2, mine:2 }, 4:{ bank:3, mine:3 } } };
+function missing(k, L) {
+  const r = k === 'hall' ? Object.assign({}, HALLREQ[L]) : Object.assign(L > SV.b.hall ? { hall:L } : {}, (EXREQ[k] || {})[L]);
+  return Object.keys(r).filter(q => SV.b[q] < r[q]).map(q => `${BLD[q].n} niveau ${r[q]}`);
+}
+// Bouwtijd in seconden: elk niveau duurt fors langer. Eén bouwer: één klus tegelijk.
+const buildSecs = (k, L) => Math.round([15, 90, 600, 2400][L - 1]*(k === 'hall' ? 2 : 1)*(bonus('hall') ? .9 : 1));
+const fmtT = t => t < 60 ? Math.ceil(t) + ' s' : t < 3600 ? Math.ceil(t/60) + ' min' : Math.floor(t/3600) + ' u ' + Math.round(t % 3600/60) + ' min';
+const jobLeft = () => SV.job ? Math.max(0, (SV.job.end - Date.now())/1000) : 0;
+const skipCost = () => Math.max(1, Math.ceil(jobLeft()/120));
+function finishJob() { const k = SV.job.k; if (k === 'mine') { addGold(mineStock()); SV.mineT = Date.now(); } SV.b[k]++; SV.job = null; save(); }
+function tickJob() { if (SV.job && Date.now() >= SV.job.end) { finishJob(); sfx('up'); return true; } return false; }
+function startJob(k, plot) {
+  const L = SV.b[k] + 1, c = BLD[k].c[L - 1];
+  if (SV.job || !c || !canPay(c) || missing(k, L).length) { sfx('no'); return; }
+  SV.gold -= c[0]; SV.pearls -= c[1]; if (plot !== undefined) SV.plots[plot] = k;
+  SV.job = { k, end:Date.now() + buildSecs(k, L)*1000 }; sfx('coin'); save();
+}
 // Elke bouwplaats heeft terrein; een gebouw op zijn voorkeursterrein krijgt een bonus. Er is maar één heuvel.
-const TERR = ['kust', 'heuvel', 'kust', 'centrum', 'centrum', 'kust'], TICON = { kust:'🌊', heuvel:'⛰️', centrum:'🏘️' }, MOVE_COST = 30;
-const bonus = k => { const i = SV.plots.indexOf(k); return i >= 0 && TERR[i] === BLD[k].likes; };
-const PLOTS = [[20,24],[54,17],[81,36],[27,60],[63,57],[46,84]]; // posities in % op de kaart
+const TERR = ['kust', 'heuvel', 'kust', 'centrum', 'centrum', 'kust', 'centrum', 'kust', 'heuvel'], TICON = { kust:'🌊', heuvel:'⛰️', centrum:'🏘️' }, MOVE_COST = 30;
+const bonus = k => { const i = SV.plots.indexOf(k); return i >= 0 && SV.b[k] > 0 && TERR[i] === BLD[k].likes; };
+const PLOTS = [[20,21],[50,17],[80,22],[23,50],[77,50],[50,82],[50,49],[79,78],[21,78]]; // posities in % op de kaart
 const MAPSVG = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
   <rect width="100" height="100" fill="#2b7fc4"/>
   <path d="M8 20 Q20 2 50 6 Q84 4 94 30 Q99 55 84 70 Q72 98 46 96 Q14 98 6 66 Q0 40 8 20Z" fill="#f1dca7"/>
   <path d="M11 22 Q22 6 50 10 Q82 8 90 31 Q95 54 81 67 Q70 93 46 91 Q17 93 10 65 Q4 41 11 22Z" fill="#6dbb4a"/>
-  <path d="M20 24 Q38 14 54 17 Q72 22 81 36 Q76 50 63 57 Q46 62 27 60 Q30 74 46 84" fill="none" stroke="#e3c98a" stroke-width="3.5" stroke-linecap="round"/>
-  <path d="M27 60 Q20 42 20 24 M63 57 Q56 72 46 84" fill="none" stroke="#e3c98a" stroke-width="3" stroke-linecap="round"/>
-  <g fill="#3f8f3a"><circle cx="38" cy="34" r="4"/><circle cx="43" cy="38" r="3.4"/><circle cx="70" cy="76" r="3.6"/><circle cx="14" cy="44" r="3.2"/><circle cx="84" cy="54" r="3"/><circle cx="48" cy="45" r="3"/></g>
+  <path d="M20 21 Q50 12 80 22 M23 50 L77 50 M21 78 Q50 88 79 78 M50 17 L50 82 M20 21 L23 50 L21 78 M80 22 L77 50 L79 78" fill="none" stroke="#e3c98a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#3f8f3a"><circle cx="36" cy="34" r="3.4"/><circle cx="65" cy="35" r="3"/><circle cx="36" cy="65" r="3"/><circle cx="64" cy="66" r="3.4"/><circle cx="12" cy="36" r="2.6"/><circle cx="89" cy="64" r="2.6"/></g>
 </svg>`;
 let selPlot = null, moving = null, shopMsg = '';
 function mineStock() {
@@ -182,39 +216,45 @@ function mineStock() {
 const $ = id => document.getElementById(id);
 const costTxt = c => `🪙${c[0]}${c[1] ? ' ⚪' + c[1] : ''}`;
 const canPay = c => SV.gold >= c[0] && SV.pearls >= c[1];
-function resHtml() { return `<span class="pill">🪙 ${SV.gold}</span><span class="pill">⚪ ${SV.pearls}</span><span class="pill">💎 ${SV.diamonds}</span>`; }
+function resHtml() { return `<span class="pill">🏆 ${SV.tr}</span><span class="pill">🪙 ${SV.gold}<small style="opacity:.6"> / ${goldCap()}</small></span><span class="pill">⚪ ${SV.pearls}</span><span class="pill">💎 ${SV.diamonds}</span>`; }
 function renderDorp() {
   $('res').innerHTML = resHtml();
   let h = MAPSVG;
   PLOTS.forEach((p, i) => {
     const k = SV.plots[i], sel = selPlot === i ? ' sel' : '';
-    if (k) h += `<button class="plot built${sel}" data-act="plot" data-i="${i}" style="left:${p[0]}%;top:${p[1]}%" aria-label="${BLD[k].n}">${BLD[k].i}<span class="tr">${TICON[TERR[i]]}</span><span class="lv">${SV.b[k]}${bonus(k) ? '★' : ''}</span><span class="nm">${BLD[k].n}</span>${k === 'mine' && mineStock() > 0 ? '<span class="bub">🪙</span>' : ''}</button>`;
+    if (k) h += `<button class="plot built${sel}" data-act="plot" data-i="${i}" style="left:${p[0]}%;top:${p[1]}%" aria-label="${BLD[k].n}">${BLD[k].i}<span class="tr">${TICON[TERR[i]]}</span><span class="lv">${SV.job && SV.job.k === k ? '🔨' : SV.b[k] + (bonus(k) ? '★' : '')}</span><span class="nm">${BLD[k].n}</span>${k === 'mine' && mineStock() > 0 ? '<span class="bub">🪙</span>' : ''}</button>`;
     else h += `<button class="plot empty${sel}" data-act="plot" data-i="${i}" style="left:${p[0]}%;top:${p[1]}%" aria-label="Lege bouwplaats, ${TERR[i]}">＋<span class="tr">${TICON[TERR[i]]}</span></button>`;
   });
   $('map').innerHTML = h;
   let s = '';
   if (moving !== null) s = `<div class="hint">Tik op de plek waar de <b>${BLD[SV.plots[moving]].n}</b> heen moet. Staat daar al iets, dan ruilen ze. Kost 🪙${MOVE_COST}.</div><button class="ghost" data-act="movecancel">Annuleer</button>`;
-  else if (selPlot === null) s = `<div class="hint">Tik op een bouwplaats <b>＋</b> om te bouwen, of op een gebouw om het te verbeteren.<br>Terrein telt: 🌊 kust · ⛰️ heuvel · 🏘️ centrum.</div>`;
+  else if (selPlot === null) s = `<div class="hint">Tik op een bouwplaats <b>＋</b> om te bouwen, of op een gebouw om het te verbeteren. Goud verdien je met expedities en aanvallen.<br>Terrein telt: 🌊 kust · ⛰️ heuvel · 🏘️ centrum.</div>`;
   else if (SV.plots[selPlot]) {
-    const k = SV.plots[selPlot], b = BLD[k], l = SV.b[k], c = b.c[l];
-    s = `<div class="row"><div class="ico">${b.i}</div><div class="txt"><b>${b.n}</b> · niveau ${l}<small>${b.d(l)}</small>${c ? `<small>Volgend niveau: ${b.d(l+1)}</small>` : ''}</div>` +
-        (c ? `<button class="${canPay(c) ? '' : 'off'}" data-act="up" data-k="${k}">Upgrade<br>${costTxt(c)}</button>` : `<button class="off" disabled>MAX</button>`) + `</div>`;
+    const k = SV.plots[selPlot], b = BLD[k], l = SV.b[k], c = b.c[l], busy = SV.job && SV.job.k === k, miss = c ? missing(k, l + 1) : [];
+    let btn;
+    if (busy) btn = `<button class="${SV.diamonds >= skipCost() ? 'gem' : 'off'}" data-act="skip">Nu klaar<br>💎 <span data-skip>${skipCost()}</span></button>`;
+    else if (!c) btn = `<button class="off" disabled>MAX</button>`;
+    else btn = `<button class="${canPay(c) && !SV.job && !miss.length ? '' : 'off'}" data-act="up" data-k="${k}">Upgrade<br>${costTxt(c)}<br>⏱ ${fmtT(buildSecs(k, l + 1))}</button>`;
+    s = `<div class="row"><div class="ico">${b.i}</div><div class="txt"><b>${b.n}</b> · niveau ${l}<small>${l ? b.d(l) : 'Nog in aanbouw'}</small>${busy ? `<small class="ok">🔨 ${l ? 'Upgrade' : 'Bouw'} klaar over <span data-timer>${fmtT(jobLeft())}</span></small>` : c ? `<small>Volgend niveau: ${b.d(l+1)}</small>` : ''}</div>${btn}</div>`;
+    if (!busy && miss.length) s += `<small class="nok">🔒 Eerst nodig: ${miss.join(', ')}</small>`;
+    else if (!busy && c && SV.job) s += `<small class="nok">🔨 De bouwer is bezig met ${BLD[SV.job.k].n}.</small>`;
     s += `<small class="${bonus(k) ? 'ok' : 'nok'}">${TICON[b.likes]} Voorkeur ${b.likes}: ${b.bonus} — ${bonus(k) ? 'actief ★' : 'niet actief, staat op ' + TERR[selPlot]}</small>`;
     s += `<div class="row">${k === 'mine' ? `<button class="gold" data-act="collect" style="flex:1">Innen 🪙 ${mineStock()}</button>` : ''}${k === 'bar' ? `<button data-act="leger" style="flex:1;background:#a61e4d">⚔️ Leger</button>` : ''}<button class="ghost" data-act="move" style="flex:1">Verplaats 🪙${MOVE_COST}</button></div>`;
   } else {
     const free = Object.keys(BLD).filter(k => !SV.plots.includes(k));
     if (!free.length) s = `<div class="hint">Alle gebouwen staan al. Deze plek blijft vrij.</div>`;
     if (free.length) s = `<small>Deze plek is ${TICON[TERR[selPlot]]} <b>${TERR[selPlot]}</b>. ★ = dit gebouw krijgt hier zijn bonus.</small>`;
-    for (const k of free) { const b = BLD[k], c = b.c[0], fit = TERR[selPlot] === b.likes;
-      s += `<div class="row"><div class="ico">${b.i}</div><div class="txt"><b>${b.n}${fit ? ' ★' : ''}</b><small>${b.d(0)}</small><small class="${fit ? 'ok' : ''}">${TICON[b.likes]} ${b.likes}: ${b.bonus}</small></div><button class="${canPay(c) ? '' : 'off'}" data-act="build" data-k="${k}">Bouw hier<br>${costTxt(c)}</button></div>`; }
+    for (const k of free) { const b = BLD[k], c = b.c[0], fit = TERR[selPlot] === b.likes, miss = missing(k, 1);
+      s += `<div class="row"><div class="ico">${b.i}</div><div class="txt"><b>${b.n}${fit ? ' ★' : ''}</b><small>${b.d(0)}</small><small class="${fit ? 'ok' : ''}">${TICON[b.likes]} ${b.likes}: ${b.bonus}</small></div><button class="${canPay(c) && !SV.job && !miss.length ? '' : 'off'}" data-act="build" data-k="${k}">Bouw hier<br>${costTxt(c)}<br>⏱ ${fmtT(buildSecs(k, 1))}</button></div>`; }
+    if (free.length && SV.job) s += `<small class="nok">🔨 De bouwer is bezig met ${BLD[SV.job.k].n}.</small>`;
   }
   $('sheet').innerHTML = s;
-  $('playBtn').textContent = '▶ Expeditie ' + SV.sel;
-  $('endBtn').innerHTML = '∞ Oneindig' + (SV.best ? `<br>record ${SV.best} m` : '');
+  $('playBtn').innerHTML = '🏃 Expeditie<br>' + SV.sel;
+  $('endBtn').innerHTML = '∞ Oneindig' + (SV.best ? `<br>${SV.best} m` : '');
   $('muteBtn').textContent = SV.mute ? '🔇' : '🔊';
 }
 function show(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === id); }
-function goDorp() { G.mode = 'dorp'; moving = null; renderDorp(); show('dorp'); }
+function goDorp() { G.mode = 'dorp'; moving = null; SV.sel = SV.max; renderDorp(); show('dorp'); }
 
 /* ===================== Winkel & diamanten ===================== */
 // Betaaladapter. ECHTE betalingen zijn NIET gekoppeld: vervang PAY.buy door Play Billing / StoreKit / Stripe
@@ -242,7 +282,7 @@ document.addEventListener('click', e => {
   if (a === 'plot') {
     const i = +t.dataset.i;
     if (moving !== null) { // verplaatsen of ruilen
-      if (i !== moving && SV.gold >= MOVE_COST) { if (SV.b.mine) { SV.gold += mineStock(); SV.mineT = Date.now(); }
+      if (i !== moving && SV.gold >= MOVE_COST) { if (SV.b.mine) { addGold(mineStock()); SV.mineT = Date.now(); }
         SV.gold -= MOVE_COST; [SV.plots[i], SV.plots[moving]] = [SV.plots[moving], SV.plots[i]]; selPlot = i; sfx('up'); save(); }
       else if (i !== moving) sfx('no');
       moving = null;
@@ -257,27 +297,17 @@ document.addEventListener('click', e => {
     if (unitOk(k) && armySize() < armyCap() && SV.gold >= u.cost) { SV.gold -= u.cost; SV.army[k]++; sfx('coin'); save(); } else sfx('no');
     renderLeger();
   }
-  else if (a === 'rprev') { SV.raidSel = Math.max(1, SV.raidSel-1); renderLeger(); }
-  else if (a === 'rnext') { SV.raidSel = Math.min(SV.raid, SV.raidSel+1); renderLeger(); }
+  else if (a === 'rnext') { tIdx++; renderLeger(); }
+  else if (a === 'verd') openVerd();
+  else if (a === 'dadd') { const l = +t.dataset.l; if (defOk(k) && defUsed() + DCOST[k] <= defBudget() && SV.def[l].length < 6) { SV.def[l].push(k); sfx('coin'); save(); netPush(); } else sfx('no'); renderVerd(); }
+  else if (a === 'ddel') { SV.def[+t.dataset.l].splice(+t.dataset.j, 1); save(); netPush(); renderVerd(); }
   else if (a === 'raid') startRaid();
   else if (a === 'rsel') { if (R.left[k] > 0) R.sel = k; renderRaidBar(); }
   else if (a === 'rdone') endRaid();
-  else if (a === 'build') {
-    const c = BLD[k].c[0];
-    if (selPlot !== null && !SV.plots[selPlot] && !SV.plots.includes(k) && canPay(c)) {
-      SV.gold -= c[0]; SV.pearls -= c[1]; SV.b[k] = 1; SV.plots[selPlot] = k; if (k === 'mine') SV.mineT = Date.now(); sfx('up'); save();
-    } else sfx('no');
-    renderDorp();
-  } else if (a === 'up') {
-    const c = BLD[k].c[SV.b[k]];
-    if (c && canPay(c)) {
-      if (k === 'mine') { SV.gold += mineStock(); SV.mineT = Date.now(); }
-      SV.gold -= c[0]; SV.pearls -= c[1]; SV.b[k]++; sfx('up'); save();
-    } else sfx('no');
-    renderDorp();
-  } else if (a === 'collect') { const st = mineStock(); if (st) { SV.gold += st; SV.mineT = Date.now(); sfx('coin'); save(); } renderDorp(); }
-  else if (a === 'prev') { SV.sel = Math.max(1, SV.sel-1); renderDorp(); }
-  else if (a === 'next') { SV.sel = Math.min(SV.max, SV.sel+1); renderDorp(); }
+  else if (a === 'build') { if (selPlot !== null && !SV.plots[selPlot] && !SV.plots.includes(k)) startJob(k, selPlot); else sfx('no'); renderDorp(); }
+  else if (a === 'up') { startJob(k); renderDorp(); }
+  else if (a === 'skip') { if (SV.job && SV.diamonds >= skipCost()) { SV.diamonds -= skipCost(); finishJob(); sfx('up'); } else sfx('no'); renderDorp();
+  } else if (a === 'collect') { const st = mineStock(); if (st) { addGold(st); SV.mineT = Date.now(); sfx('coin'); save(); } renderDorp(); }
   else if (a === 'mute') { SV.mute = !SV.mute; save(); renderDorp(); }
   else if (a === 'play') start(SV.sel);
   else if (a === 'endless') start(0);
@@ -296,7 +326,13 @@ document.addEventListener('click', e => {
               .catch(err => { sfx('no'); shopMsg = err.message; renderShop(); });
   }
 });
-setInterval(() => { if (G.mode === 'dorp' && SV.b.mine && $('dorp').classList.contains('on')) renderDorp(); }, 5000);
+setInterval(() => { if (G.mode === 'dorp' && SV.b.mine && !SV.job && $('dorp').classList.contains('on')) renderDorp(); }, 5000);
+setInterval(() => { // bouwklok: alleen de tellers bijwerken, zodat lijsten niet verspringen
+  if (!SV.job) return;
+  if (tickJob()) { if (G.mode === 'dorp') refresh(); return; }
+  for (const e of document.querySelectorAll('[data-timer]')) e.textContent = fmtT(jobLeft());
+  for (const e of document.querySelectorAll('[data-skip]')) e.textContent = skipCost();
+}, 1000);
 
 /* ===================== Geluid ===================== */
 let AC = null;
@@ -429,18 +465,18 @@ function end(win, why) {
   let txt;
   if (win) {
     const bonus = 20 + 5*G.n, first = G.n === SV.max;
-    SV.gold += G.gold + bonus; SV.pearls += G.pearls + (first ? 1 : 0);
+    addGold(G.gold + bonus); SV.pearls += G.pearls + (first ? 1 : 0);
     if (first) { SV.max++; SV.diamonds++; } SV.sel = Math.min(SV.max, G.n + 1);
     sfx('bell');
     txt = `Het dorp is gewaarschuwd!<br>🪙 ${G.gold} + ${bonus} bonus &nbsp; ⚪ ${G.pearls}${first ? ' + 1 &nbsp; 💎 + 1 (eerste keer)' : ''}`;
     $('eTitle').textContent = '🔔 Klok geluid!'; $('eBtn').textContent = '▶ Expeditie ' + SV.sel;
   } else if (G.n === 0) { // oneindig: alles wat je pakte is van jou
     const m = meters(), rec = m > SV.best; if (rec) SV.best = m;
-    G.banked = { gold:G.gold, pearls:G.pearls }; SV.gold += G.gold; SV.pearls += G.pearls;
+    G.banked = { gold:addGold(G.gold), pearls:G.pearls }; SV.pearls += G.pearls;
     txt = `${why}<br><b>${m} m</b>${rec ? ' — nieuw record!' : ` (record ${SV.best} m)`}<br>🪙 ${G.gold} &nbsp; ⚪ ${G.pearls}`;
     $('eTitle').textContent = '🌊 Einde van de tocht'; $('eBtn').textContent = '↻ Opnieuw';
   } else {
-    const keep = Math.floor(G.gold/2); G.banked = { gold:keep, pearls:0 }; SV.gold += keep;
+    const keep = Math.floor(G.gold/2); G.banked = { gold:addGold(keep), pearls:0 };
     txt = `${why}<br>Je redt de helft van je buit: 🪙 ${keep}. Parels zijn verloren.`;
     $('eTitle').textContent = '🌊 Verzwolgen'; $('eBtn').textContent = '↻ Opnieuw';
   }
@@ -548,48 +584,123 @@ const DT = {
   n:{ n:'Nest',  i:'🥚', hp:340, st:1 },
 };
 const UK = ['t', 'a', 's'];
-const armyCap = () => CAP[SV.b.bar] + (bonus('bar') ? 2 : 0);
+const armyCap = () => CAP[SV.b.bar] + 2*SV.b.arch + (bonus('bar') ? 2 : 0);
 const armySize = () => SV.army.t + SV.army.a + SV.army.s;
-const unitOk = k => SV.b.bar >= (k === 's' ? 2 : 1);
+const unitOk = k => k === 'a' ? SV.b.arch >= 1 : SV.b.bar >= (k === 's' ? 2 : 1);
+const unitWhy = { t:'Bouw eerst een Kazerne.', a:'Bouw eerst een Boogschutterskamp.', s:'Vanaf Kazerne niveau 2.' };
+const archMul = () => 1 + .1*Math.max(0, SV.b.arch - 1) + (bonus('arch') ? .1 : 0);
 const hpMul = () => 1 + .15*SV.b.inn, dmgMul = () => 1 + .15*SV.b.shop + (bonus('shop') ? .1 : 0);
 const raidTime = () => 45 + 5*SV.b.dike + (bonus('dike') ? 5 : 0);
 const sight = () => 180 + 110*(SV.b.light + (bonus('light') ? 1 : 0));
-function genRaid(lv) { // deterministisch per eiland
-  // vast aantal verdedigers per eiland, ongelijk verdeeld: er is altijd een zwak en een zwaar pad
-  const r = rng(lv*104729 + 7), lanes = [], B = Math.min(15, Math.round(2.6 + lv*1.1)), cnt = [1, 1, 1];
+// Verdedigers staan als lijst van soorten per pad; de posities volgen daar vast uit (ook voor dorpen van andere spelers).
+function layout(types) {
+  const mobs = types.filter(k => k !== 'w'), out = []; let mi = 0, wi = 0;
+  for (const k of types) out.push(k === 'w' ? { k, d:385 + 28*wi++ } : { k, d:mobs.length > 1 ? 205 + 215*mi++/(mobs.length - 1) : (mi++, 300) });
+  return out.sort((a, b) => a.d - b.d);
+}
+const DCOST = { k:1, m:1, w:2 }, DK = ['k', 'm', 'w'];
+const defBudget = () => 4 + 2*SV.b.dike + (bonus('dike') ? 1 : 0);
+const defPoints = def => def.reduce((a, l) => a + l.reduce((x, k) => x + DCOST[k], 0), 0);
+const defUsed = () => defPoints(SV.def);
+const defOk = k => SV.b.dike >= (k === 'w' ? 2 : k === 'm' ? 1 : 0);
+function botDef(lv, seed) { // oefendorp: vast puntenbudget, ongelijk verdeeld zodat er een zwak en een zwaar pad is
+  const r = rng(lv*104729 + 7 + seed*31), B = Math.min(15, Math.round(2.6 + lv*1.1)), cnt = [1, 1, 1], def = [];
   for (let i = 3; i < B; i++) { let j = Math.floor(r()*r()*3); if (cnt[j] >= 6) j = cnt.indexOf(Math.min(...cnt)); cnt[j]++; }
   const rot = Math.floor(r()*3);
-  for (let i = 0; i < 3; i++) {
-    const n = cnt[(i + rot) % 3], ds = [];
-    for (let j = 0; j < n; j++) { const q = r(), k = lv >= 3 && q < .22 ? 'w' : lv >= 2 && q < .5 ? 'm' : 'k'; ds.push({ k, d:k === 'w' ? 380 + r()*60 : 190 + r()*250 }); }
-    lanes.push(ds.sort((a, b) => a.d - b.d));
-  }
-  return { lv, lanes, gold:60 + 25*lv, pearls:1 + Math.floor(lv/3) };
+  for (let i = 0; i < 3; i++) { const l = []; for (let j = 0; j < cnt[(i + rot) % 3]; j++) { const q = r(); l.push(lv >= 3 && q < .22 ? 'w' : lv >= 2 && q < .5 ? 'm' : 'k'); } def.push(l); }
+  return def;
 }
+function genRaid(lv) { return { lv, lanes:botDef(lv, 0).map(layout) }; } // voor tests
+
+/* ---- Andere spelers: gedeelde database (alleen beschikbaar via de gedeelde Claude-pagina) ---- */
+const NET = { db:null, id:null, players:[], state:'offline' };
+const esc = t => String(t).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
+function cleanDef(d) { // gegevens van anderen zijn niet te vertrouwen: alleen geldige opstellingen binnen het maximale budget
+  if (!Array.isArray(d) || d.length !== 3) return null;
+  const out = d.map(l => Array.isArray(l) ? l.filter(k => DCOST[k]).slice(0, 6) : []);
+  return defPoints(out) <= 13 && defPoints(out) > 0 ? out : null;
+}
+async function netInit() {
+  try {
+    if (!window.claude || !window.claude.use) return;
+    const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+    if (!db || !user) return;
+    NET.id = await user.id(); NET.db = db; NET.state = 'online';
+    await netPush(); await netPull(); await netInbox(); refresh();
+  } catch (e) { NET.state = 'offline'; }
+}
+let pushT = 0;
+function netPush() { // eigen dorp delen: naam, bekers en verdediging
+  if (!NET.db) return Promise.resolve();
+  clearTimeout(pushT);
+  return new Promise(res => { pushT = setTimeout(() => NET.db.doc('players/' + NET.id).set({ name:SV.name.slice(0, 20), tr:SV.tr, def:SV.def, ts:Date.now() }).catch(() => {}).then(res), 600); });
+}
+async function netPull() {
+  if (!NET.db) return;
+  try {
+    const snap = await NET.db.collection('players').orderBy('ts', 'desc').limit(60).get(); NET.players = [];
+    for (const d of snap.docs) { const v = d.data() || {}, def = cleanDef(v.def); if (d.id !== NET.id && def) NET.players.push({ id:d.id, name:String(v.name || 'Onbekend dorp').slice(0, 20), tr:Math.max(0, Math.floor(+v.tr || 0)), def }); }
+  } catch (e) {}
+}
+async function netInbox() { // wie viel mij aan sinds de vorige keer?
+  if (!NET.db) return;
+  try {
+    const snap = await NET.db.collection('attacks').where('to', '==', NET.id).get(); let seen = SV.seen;
+    for (const d of snap.docs) { const v = d.data() || {}, ts = +v.ts || 0, st = clamp(Math.floor(+v.stars || 0), 0, 3); if (ts <= SV.seen) continue;
+      const dt = st ? -4*st : 6; SV.tr = Math.max(0, SV.tr + dt); SV.log.unshift({ name:String(v.name || 'Onbekend dorp').slice(0, 20), stars:st, dt, ts }); seen = Math.max(seen, ts); }
+    if (seen !== SV.seen) { SV.seen = seen; SV.log = SV.log.sort((a, b) => b.ts - a.ts).slice(0, 8); save(); netPush(); }
+  } catch (e) {}
+}
+function netAttack(target, stars) { if (NET.db && target.id) NET.db.collection('attacks').add({ to:target.id, from:NET.id, name:SV.name.slice(0, 20), stars, ts:Date.now() }).catch(() => {}); }
+function refresh() { if ($('dorp').classList.contains('on')) renderDorp(); else if ($('leger').classList.contains('on')) renderLeger(); else if ($('verd').classList.contains('on')) renderVerd(); }
+
+let tIdx = 0;
+function targets() { // echte spelers eerst (dichtst bij jouw bekers), daarna altijd een oefendorp
+  const lv = 1 + Math.floor(SV.tr/24), list = NET.players.slice().sort((a, b) => Math.abs(a.tr - SV.tr) - Math.abs(b.tr - SV.tr));
+  list.push({ id:null, bot:true, name:'Oefendorp', tr:SV.tr, def:botDef(lv, Math.floor(tIdx/(list.length + 1))) });
+  return list;
+}
+function curTarget() { const l = targets(), t = l[tIdx % l.length]; t.gold = 50 + 8*defPoints(t.def) + Math.floor(t.tr/5); t.pearls = 1 + Math.floor(t.tr/100); return t; }
+
+function renderVerd() {
+  $('res4').innerHTML = resHtml();
+  let h = `<div class="card"><label for="nm"><b>Naam van je dorp</b></label><input class="nm" id="nm" maxlength="20" value="${esc(SV.name)}"><small style="display:block;color:#4b5b6b;margin-top:4px">${NET.state === 'online' ? 'Online: andere spelers kunnen je dorp aanvallen.' : 'Offline: je dorp is niet zichtbaar voor anderen.'}</small></div>`;
+  h += `<div class="card"><b>Verdedigingspunten: ${defUsed()} / ${defBudget()}</b><small style="display:block;color:#4b5b6b">Een aanvaller moet 2 van je 3 nesten vernielen om bekers te winnen. 🦀 1 punt · 🐦 1 punt (Muur niveau 1) · 🐚 toren 2 punten (Muur niveau 2). Tik op een verdediger om hem weg te halen.</small></div>`;
+  SV.def.forEach((l, i) => {
+    h += `<div class="card"><b>Pad ${i+1}</b><div class="row" style="flex-wrap:wrap;gap:6px;margin:6px 0">${l.map((k, j) => `<button class="chip" data-act="ddel" data-l="${i}" data-j="${j}" aria-label="${DT[k].n} weghalen">${DT[k].i}</button>`).join('') || '<small>Onverdedigd</small>'}<span style="font-size:22px">→ 🥚</span></div><div class="row" style="gap:6px">` +
+      DK.map(k => `<button class="${defOk(k) && defUsed() + DCOST[k] <= defBudget() && l.length < 6 ? 'ghost' : 'off'}" style="flex:1;min-height:44px" data-act="dadd" data-l="${i}" data-k="${k}">＋ ${DT[k].i}</button>`).join('') + `</div></div>`; });
+  h += `<h3>Aanvallen op jouw dorp</h3><div class="card">` + (SV.log.length ? SV.log.map(e => `<div>${esc(e.name)}: ${e.stars ? '⭐'.repeat(e.stars) : 'afgeslagen'} <b class="${e.dt > 0 ? 'ok' : 'nok'}">${e.dt > 0 ? '+' : ''}${e.dt} 🏆</b></div>`).join('') : `<small>Nog niemand heeft je aangevallen.</small>`) + `</div>`;
+  $('defList').innerHTML = h;
+}
+function openVerd() { G.mode = 'dorp'; renderVerd(); show('verd'); netInbox().then(() => { if ($('verd').classList.contains('on') && document.activeElement.id !== 'nm') renderVerd(); }); }
+document.addEventListener('change', e => { if (e.target.id === 'nm') { SV.name = e.target.value.trim().slice(0, 20) || SV.name; save(); netPush(); } });
+
 function renderLeger() {
   $('res3').innerHTML = resHtml();
   let h = '';
-  if (!SV.b.bar) h = `<div class="note">Je hebt nog geen Kazerne. Bouw er een op de dorpskaart om wachters te trainen en op strooptocht te gaan.</div>`;
+  if (!SV.b.bar && !SV.b.arch) h = `<div class="note">Je hebt nog geen Kazerne of Boogschutterskamp. Bouw er een op de dorpskaart om wachters te trainen en aan te vallen.</div>`;
   else {
-    h += `<div class="card"><b>Wachters: ${armySize()} / ${armyCap()}</b><small style="display:block;color:#4b5b6b">Herberg: +${Math.round((hpMul()-1)*100)}% leven · Werkplaats: +${Math.round((dmgMul()-1)*100)}% schade · Dijk: ${raidTime()} s tot de vloed</small></div>`;
+    h += `<div class="card"><b>Wachters: ${armySize()} / ${armyCap()}</b><small style="display:block;color:#4b5b6b">Herberg: +${Math.round((hpMul()-1)*100)}% leven · Werkplaats: +${Math.round((dmgMul()-1)*100)}% schade · Muur: ${raidTime()} s tot de vloed</small></div>`;
     for (const k of UK) { const u = UT[k], ok = unitOk(k), can = ok && armySize() < armyCap() && SV.gold >= u.cost;
-      h += `<div class="card row"><div class="ico">${u.i}</div><div class="txt"><b>${u.n}</b> × ${SV.army[k]}<small>${ok ? u.tip : 'Vanaf Kazerne niveau 2.'}</small></div><button class="${can ? '' : 'off'}" data-act="train" data-k="${k}">Train<br>🪙${u.cost}</button></div>`; }
-    const g = genRaid(SV.raidSel), vis = sight();
-    h += `<h3>Verkenning eiland ${SV.raidSel}</h3><div class="card">` + g.lanes.map((ds, i) => `<div><b>Pad ${i+1}:</b> ${ds.map(d => d.d <= vis ? DT[d.k].i : '❓').join(' ')} → 🥚</div>`).join('') +
-      `<small style="display:block;color:#4b5b6b;margin-top:4px">Buit: 🪙 ${g.gold} per nest, ⚪ ${g.pearls} bij 3 nesten.${vis < 470 ? ' ❓ = buiten zicht; een hogere Vuurtoren ziet verder.' : ''}</small></div>`;
+      h += `<div class="card row"><div class="ico">${u.i}</div><div class="txt"><b>${u.n}</b> × ${SV.army[k]}<small>${ok ? u.tip : unitWhy[k]}</small></div><button class="${can ? '' : 'off'}" data-act="train" data-k="${k}">Train<br>🪙${u.cost}</button></div>`; }
+    const tg = curTarget(), vis = sight();
+    h += `<h3>Doelwit</h3><div class="card"><b>${tg.bot ? '🤖 ' : '🏛️ '}${esc(tg.name)}</b> · 🏆 ${tg.tr}${tg.bot ? ' <small style="display:inline;color:#4b5b6b">(computer, geen echte speler)</small>' : ''}` +
+      tg.def.map(layout).map((ds, i) => `<div><b>Pad ${i+1}:</b> ${ds.map(d => d.d <= vis ? DT[d.k].i : '❓').join(' ')} → 🥚</div>`).join('') +
+      `<small style="display:block;color:#4b5b6b;margin-top:4px">Buit: 🪙 ${tg.gold} per nest, ⚪ ${tg.pearls} bij 3 nesten · 🏆 +8 per nest, −6 bij 0.${vis < 470 ? ' ❓ = buiten zicht; een hogere Vuurtoren ziet verder.' : ''}</small></div>`;
+    h += `<div class="note">${NET.state === 'online' ? (NET.players.length ? `Online: ${NET.players.length} andere ${NET.players.length === 1 ? 'speler' : 'spelers'} gevonden.` : 'Online, maar er zijn nog geen andere spelers. Je vecht tegen oefendorpen tot iemand anders meedoet.') : 'Offline: alleen oefendorpen. Echte tegenstanders zijn er alleen via de gedeelde Claude-pagina.'}</div>`;
   }
   $('armyList').innerHTML = h;
-  $('raidBtn').textContent = '⚔️ Strooptocht ' + SV.raidSel;
-  $('raidBtn').className = 'big' + (SV.b.bar && armySize() ? '' : ' off');
+  $('raidBtn').textContent = '⚔️ Val aan';
+  $('raidBtn').className = 'big' + (armySize() ? '' : ' off');
 }
-function openLeger() { G.mode = 'dorp'; moving = null; renderLeger(); show('leger'); }
+function openLeger() { G.mode = 'dorp'; moving = null; renderLeger(); show('leger'); netPull().then(() => { if ($('leger').classList.contains('on')) renderLeger(); }); }
 
 let R = null;
-function mk(side, k, lane, d) { const def = side ? DT[k] : UT[k], hp = def.hp*(side ? 1 : R.hm), e = { side, k, lane, d, hp, max:hp, def, home:d }; R.ents.push(e); return e; }
+function mk(side, k, lane, d) { const def = side ? DT[k] : UT[k], hp = def.hp*(side ? 1 : R.hm), e = { side, k, lane, d, hp, max:hp, def, home:d, dm:side ? 1 : R.dm*(k === 'a' ? R.am : 1) }; R.ents.push(e); return e; }
 function startRaid() {
-  if (!SV.b.bar || !armySize()) { sfx('no'); return; }
-  const g = genRaid(SV.raidSel);
-  R = { lv:g.lv, gold:g.gold, pearls:g.pearls, t:0, time:raidTime(), left:Object.assign({}, SV.army), sel:null, ents:[], nest:[], stars:0, lost:0, sent:0, sight:sight(), hm:hpMul(), dm:dmgMul() };
+  if (!armySize()) { sfx('no'); return; }
+  const tg = curTarget(), g = { lanes:tg.def.map(layout) };
+  R = { tg, gold:tg.gold, pearls:tg.pearls, t:0, time:raidTime(), left:Object.assign({}, SV.army), sel:null, ents:[], nest:[], stars:0, lost:0, sent:0, sight:sight(), hm:hpMul(), dm:dmgMul(), am:archMul() };
   g.lanes.forEach((ds, i) => { R.nest.push(mk(1, 'n', i, 500)); for (const d of ds) mk(1, d.k, i, d.d); });
   R.sel = UK.find(k => R.left[k] > 0); G.mode = 'raid'; renderRaidBar(); show('raid');
 }
@@ -617,7 +728,7 @@ function raidStep(dt) {
       const dd = Math.abs(o.d - e.d); if (dd < bd) { bd = dd; tg = o; }
     }
     if (tg && bd <= e.def.rng) {
-      tg.hp -= e.def.dps*(e.side ? 1 : R.dm)*dt; e.hit = R.t;
+      tg.hp -= e.def.dps*e.dm*dt; e.hit = R.t;
       if (tg.hp <= 0) { if (tg.k === 'n') { R.stars++; sfx('up'); } else if (tg.side) sfx('stomp'); else { R.lost++; sfx('hurt'); } }
     } else if (e.side === 0) e.d = Math.min(e.d + e.def.sp*dt, 495);
     else if (!e.def.st) {
@@ -633,13 +744,15 @@ function endRaid() {
   G.mode = 'raidEnd';
   for (const e of R.ents) if (e.side === 0 && e.hp > 0) SV.army[e.k]++; // overlevenden keren terug
   const s = R.stars, gold = s*R.gold, pearls = s === 3 ? R.pearls : 0; let extra = '';
-  SV.gold += gold; SV.pearls += pearls;
-  if (s >= 2 && R.lv === SV.raid) { SV.raid++; SV.raidSel = SV.raid; SV.diamonds += 2; extra = '<br>💎 + 2 · volgend eiland ontdekt'; }
-  else if (s < 2 && R.lv === SV.raid) extra = '<br>Vernietig 2 nesten om het volgende eiland te ontdekken.';
+  const got = addGold(gold); SV.pearls += pearls; if (got < gold) extra += `<br>Je opslag is vol: ${gold - got} goud ging verloren. Verbeter je Bank.`;
+  const dt = s ? 8*s : -6; SV.tr = Math.max(0, SV.tr + dt);
+  if (s === 3) { SV.diamonds += 1; extra = '<br>💎 + 1 voor een volledige overwinning'; }
+  extra += `<br>🏆 ${dt > 0 ? '+' : ''}${dt}`;
+  netAttack(R.tg, s); netPush(); tIdx++;
   save(); if (s) sfx('bell');
   $('eTitle').textContent = s ? '⚔️ ' + '⭐'.repeat(s) + '☆'.repeat(3 - s) : '🌊 Teruggedreven';
   $('eText').innerHTML = `${s} van 3 nesten vernield${R.t >= R.time ? ' voordat de vloed kwam' : ''}.<br>🪙 ${gold} &nbsp; ⚪ ${pearls}${extra}<br>Verloren wachters: ${R.lost}`;
-  $('revBtn').hidden = true; $('revBtn').style.display = 'none'; $('eBtn').textContent = '⚔️ Leger'; show('eind');
+  $('revBtn').hidden = true; $('revBtn').style.display = 'none'; $('eBtn').textContent = '⚔️ Volgende'; show('eind');
 }
 function drawRaid() {
   const yt = 150, yb = H - 135, Y = d => yb - d/500*(yb - yt);
@@ -669,7 +782,7 @@ function drawRaid() {
   ctx.fillStyle = '#0b1c2ccc'; rr(12, 14, W - 24, 58, 14); ctx.fill();
   ctx.fillStyle = '#16324f'; rr(22, 48, W - 44, 12, 6); ctx.fill();
   ctx.fillStyle = k > .75 ? '#e03131' : '#4dabf7'; rr(22, 48, Math.max(6, (W - 44)*k), 12, 6); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'left'; ctx.fillText('Eiland ' + R.lv + '   ' + '⭐'.repeat(R.stars), 22, 31);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'left'; ctx.fillText((R.tg.bot ? '🤖 ' : '🏛️ ') + R.tg.name.slice(0, 14) + '  ' + '⭐'.repeat(R.stars), 22, 31);
   ctx.textAlign = 'right'; ctx.fillText('🌊 vloed over ' + Math.max(0, Math.ceil(R.time - R.t)) + ' s', W - 22, 31);
   if (!R.sent) { ctx.textAlign = 'center'; ctx.fillStyle = '#0b1c2ccc'; rr(W/2 - 165, 100, 330, 34, 10); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = 'bold 14px system-ui'; ctx.fillText('Kies een wachter onderaan en tik op een pad', W/2, 117); }
 }
@@ -867,8 +980,8 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp') release(); else if (e.code === 'ArrowDown' || e.code === 'KeyS') duckOff(); });
 addEventListener('contextmenu', e => e.preventDefault());
 
-window.VK = { G, get SV() { return SV; }, start, step, press, release, duckOn, duckOff, genLevel, genRaid, startRaid, deploy, raidStep, endRaid, get R() { return R; } };
-goDorp(); requestAnimationFrame(frame);
+window.VK = { G, get SV() { return SV; }, start, step, press, release, duckOn, duckOff, genLevel, genRaid, missing, buildSecs, tickJob, goldCap, botDef, layout, NET, curTarget, startRaid, deploy, raidStep, endRaid, get R() { return R; } };
+tickJob(); goDorp(); requestAnimationFrame(frame); netInit();
 </script>
 </body>
 </html>
