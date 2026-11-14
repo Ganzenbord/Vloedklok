@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#16324f">
 <title>Vloedklok</title>
 <style>
-  :root { --ink:#10263b; --panel:#fdf6e3; --accent:#f2a900; --go:#2f9e44; --no:#9aa5b1; }
+  :root { --ink:#10263b; --panel:#fdf6e3; --accent:#f2a900; --go:#2f9e44; --no:#9aa5b1; --dark:#0b1c2c; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { margin:0; height:100%; overflow:hidden; background:#16324f; color:var(--ink);
     font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; overscroll-behavior:none;
@@ -15,34 +15,57 @@
   .screen { position:fixed; inset:0; display:none; flex-direction:column; align-items:center;
     padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom)); }
   .screen.on { display:flex; }
-  #dorp { background:rgba(16,38,59,.55); }
-  .wrap { width:100%; max-width:460px; display:flex; flex-direction:column; min-height:0; flex:1; }
-  h1 { margin:4px 0 2px; color:#fff; font-size:30px; letter-spacing:1px; text-align:center; text-shadow:0 2px 0 #0008; }
-  .sub { color:#cfe3f5; text-align:center; font-size:13px; margin-bottom:8px; }
-  .res { display:flex; gap:8px; justify-content:center; margin-bottom:8px; }
-  .pill { background:#0b1c2c; color:#fff; border-radius:999px; padding:6px 14px; font-weight:700; font-size:16px; }
-  .list { flex:1; min-height:0; overflow-y:auto; touch-action:pan-y; display:flex; flex-direction:column; gap:8px; padding-bottom:8px; }
-  .card { background:var(--panel); border-radius:14px; padding:10px 12px; display:flex; align-items:center; gap:10px;
-    box-shadow:0 3px 0 #0004; }
-  .card .ico { font-size:30px; width:40px; text-align:center; }
-  .card .txt { flex:1; min-width:0; }
-  .card b { font-size:16px; }
-  .card small { display:block; color:#4b5b6b; font-size:12.5px; line-height:1.3; }
+  #dorp, #winkel { background:rgba(16,38,59,.55); }
+  .wrap { width:100%; max-width:460px; display:flex; flex-direction:column; min-height:0; flex:1; gap:8px; }
+  .top { display:flex; align-items:center; gap:8px; }
+  h1 { margin:0; flex:1; color:#fff; font-size:26px; letter-spacing:1px; text-shadow:0 2px 0 #0008; }
+  .res { display:flex; gap:6px; justify-content:center; flex-wrap:wrap; }
+  .pill { background:var(--dark); color:#fff; border-radius:999px; padding:6px 12px; font-weight:700; font-size:15px; }
   button { font:inherit; border:0; border-radius:12px; font-weight:800; color:#fff; background:var(--go);
     min-height:48px; padding:6px 12px; box-shadow:0 3px 0 #0005; touch-action:manipulation; }
   button:active { transform:translateY(2px); box-shadow:0 1px 0 #0005; }
   button.off { background:var(--no); }
   button.gold { background:var(--accent); color:#3b2a00; }
-  button.ghost { background:#0b1c2c; }
-  .card button { min-width:96px; font-size:13.5px; line-height:1.25; }
-  .bar { display:flex; gap:8px; align-items:stretch; padding-top:8px; }
-  .bar .big { flex:1; font-size:21px; min-height:64px; }
-  .bar .sq { width:56px; font-size:22px; }
+  button.ghost { background:var(--dark); }
+  button.gem { background:#3b5bdb; }
+  .top button { min-height:42px; }
+
+  /* dorpskaart met bouwplaatsen */
+  .map { position:relative; flex:1; min-height:230px; border-radius:18px; overflow:hidden; background:#2b7fc4; box-shadow:0 3px 0 #0004; }
+  .map svg { position:absolute; inset:0; width:100%; height:100%; }
+  .plot { position:absolute; transform:translate(-50%,-50%); width:64px; height:64px; min-height:0; padding:0; border-radius:50%;
+    font-size:30px; line-height:1; box-shadow:0 4px 0 #0004; }
+  .plot:active { transform:translate(-50%,-48%); }
+  .plot.empty { background:#ffffff40; border:3px dashed #fff; color:#fff; font-size:28px; }
+  .plot.built { background:var(--panel); border:3px solid #8a5a2b; }
+  .plot.sel { outline:4px solid var(--accent); outline-offset:2px; }
+  .plot .lv { position:absolute; right:-6px; bottom:-4px; background:var(--dark); color:#fff; font-size:11px; border-radius:999px; padding:3px 6px; }
+  .plot .nm { position:absolute; left:50%; top:100%; transform:translateX(-50%); margin-top:4px; white-space:nowrap; font-size:11px; color:#fff;
+    background:#0b1c2cb0; border-radius:6px; padding:1px 6px; }
+  .plot .bub { position:absolute; left:50%; top:-16px; transform:translateX(-50%); font-size:18px; animation:bob 1s infinite alternate; }
+  @keyframes bob { to { margin-top:-5px; } }
+  @media (prefers-reduced-motion: reduce) { .plot .bub { animation:none; } }
+
+  .sheet { background:var(--panel); border-radius:14px; padding:10px 12px; min-height:84px; max-height:34vh; overflow-y:auto; touch-action:pan-y;
+    display:flex; flex-direction:column; gap:8px; box-shadow:0 3px 0 #0004; }
+  .row { display:flex; align-items:center; gap:10px; }
+  .row .ico { font-size:28px; width:36px; text-align:center; }
+  .row .txt { flex:1; min-width:0; }
+  .row b { font-size:15.5px; }
+  .row small { display:block; color:#4b5b6b; font-size:12.5px; line-height:1.3; }
+  .row button { min-width:92px; font-size:13.5px; line-height:1.25; }
+  .hint { color:#4b5b6b; font-size:14px; text-align:center; margin:auto 0; }
+  .bar { display:flex; gap:8px; align-items:stretch; }
+  .bar .big { flex:1; font-size:19px; min-height:62px; }
+  .bar .sq { width:52px; font-size:22px; }
+  .list { flex:1; min-height:0; overflow-y:auto; touch-action:pan-y; display:flex; flex-direction:column; gap:8px; }
+  .card { background:var(--panel); border-radius:14px; padding:10px 12px; box-shadow:0 3px 0 #0004; }
+  h3 { margin:6px 0 0; color:#fff; font-size:15px; }
+  .note { background:#fff3bf; color:#5c3c00; border-radius:10px; padding:8px 10px; font-size:13px; line-height:1.35; }
   #eind { justify-content:flex-end; background:rgba(16,38,59,.6); }
   #eind .box { background:var(--panel); border-radius:18px; padding:18px; width:100%; max-width:460px; text-align:center; }
   #eind h2 { margin:0 0 6px; font-size:26px; }
   #eind p { margin:4px 0 14px; font-size:16px; line-height:1.5; }
-  #eind .bar { padding-top:0; }
 </style>
 </head>
 <body>
@@ -50,16 +73,28 @@
 
 <div id="dorp" class="screen">
   <div class="wrap">
-    <h1>VLOEDKLOK</h1>
-    <div class="sub">Ren voor de vloed uit, luid de klok, bouw je dorp.</div>
-    <div class="res"><span class="pill" id="rGold"></span><span class="pill" id="rPearl"></span></div>
-    <div class="list" id="list"></div>
+    <div class="top">
+      <h1>VLOEDKLOK</h1>
+      <button class="gem" data-act="shop">🛒 Winkel</button>
+      <button class="ghost" data-act="mute" id="muteBtn" aria-label="Geluid"></button>
+    </div>
+    <div class="res" id="res"></div>
+    <div class="map" id="map"></div>
+    <div class="sheet" id="sheet"></div>
     <div class="bar">
       <button class="sq ghost" data-act="prev" aria-label="Vorige expeditie">‹</button>
       <button class="big" data-act="play" id="playBtn"></button>
       <button class="sq ghost" data-act="next" aria-label="Volgende expeditie">›</button>
-      <button class="sq ghost" data-act="mute" id="muteBtn" aria-label="Geluid"></button>
+      <button class="ghost" data-act="endless" id="endBtn" style="font-size:13px;line-height:1.2"></button>
     </div>
+  </div>
+</div>
+
+<div id="winkel" class="screen">
+  <div class="wrap">
+    <div class="top"><h1>WINKEL</h1><button class="ghost" data-act="home">✕ Dorp</button></div>
+    <div class="res" id="res2"></div>
+    <div class="list" id="shopList"></div>
   </div>
 </div>
 
@@ -69,6 +104,7 @@
     <p id="eText"></p>
     <div class="bar">
       <button class="ghost" data-act="home" style="flex:1">Dorp</button>
+      <button class="gem" data-act="revive" id="revBtn" style="flex:1"></button>
       <button class="big" data-act="again" id="eBtn"></button>
     </div>
   </div>
@@ -76,63 +112,113 @@
 
 <script>
 'use strict';
-/* ===================== Opslag & dorp (meta-laag) ===================== */
+/* ===================== Opslag ===================== */
 const KEY = 'vloedklok.v1';
-const DEF = { gold:0, pearls:0, max:1, sel:1, b:{inn:0,shop:0,dike:0,light:0,mine:0}, mineT:Date.now(), mute:false };
+const DEV = /[?&]dev=1/.test(location.search);
+const DEF = { gold:0, pearls:0, diamonds:0, max:1, sel:1, best:0, b:{inn:0,shop:0,dike:0,light:0,mine:0},
+  plots:[null,null,null,null,null,null], mineT:Date.now(), mute:false };
 function loadSave() {
-  try {
-    const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && s.b) return Object.assign({}, DEF, s, { b:Object.assign({}, DEF.b, s.b) });
-  } catch (e) {}
-  return JSON.parse(JSON.stringify(DEF));
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+  const v = JSON.parse(JSON.stringify(DEF));
+  if (s && s.b) { Object.assign(v, s); v.b = Object.assign({}, DEF.b, s.b); v.plots = (s.plots || DEF.plots).slice(0, 6); while (v.plots.length < 6) v.plots.push(null); }
+  for (const k in v.b) if (v.b[k] > 0 && !v.plots.includes(k)) { const i = v.plots.indexOf(null); if (i >= 0) v.plots[i] = k; } // oude saves een plek geven
+  return v;
 }
 let SV = loadSave();
 function save() { try { localStorage.setItem(KEY, JSON.stringify(SV)); } catch (e) {} }
 
+/* ===================== Dorp: gebouwen op bouwplaatsen ===================== */
 const MAGNET = [0, 70, 110, 150];
 // c = kosten per niveau: [goud, parels]
 const BLD = {
-  mine:  { n:'Goudmolen',  i:'⚙️', d:l => l ? `Maalt ${l*8} goud/min (opslag ${l*240})` : 'Maalt goud, ook als je weg bent', c:[[80,0],[250,1],[600,3],[1300,6]] },
+  mine:  { n:'Goudmijn',   i:'⛏️', d:l => l ? `Delft ${l*8} goud/min (opslag ${l*240})` : 'Delft goud, ook als je weg bent', c:[[80,0],[250,1],[600,3],[1300,6]] },
   dike:  { n:'Dijk',       i:'🧱', d:l => l ? `Vloed ${l*4}% trager, meer voorsprong` : 'Remt de vloed af', c:[[120,0],[300,1],[650,3],[1200,6]] },
   light: { n:'Vuurtoren',  i:'🗼', d:l => l ? `Trekt munten aan (bereik ${MAGNET[l]})` : 'Trekt munten naar je toe', c:[[100,0],[350,2],[800,4]] },
   inn:   { n:'Herberg',    i:'🏠', d:l => `${3+l} levens per expeditie`, c:[[150,0],[400,2],[900,5]] },
   shop:  { n:'Werkplaats', i:'🥾', d:l => `${1+l}× springen in de lucht`, c:[[300,3],[800,8]] },
 };
+const PLOTS = [[20,24],[54,17],[81,36],[27,60],[63,57],[46,84]]; // posities in % op de kaart
+const MAPSVG = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+  <rect width="100" height="100" fill="#2b7fc4"/>
+  <path d="M8 20 Q20 2 50 6 Q84 4 94 30 Q99 55 84 70 Q72 98 46 96 Q14 98 6 66 Q0 40 8 20Z" fill="#f1dca7"/>
+  <path d="M11 22 Q22 6 50 10 Q82 8 90 31 Q95 54 81 67 Q70 93 46 91 Q17 93 10 65 Q4 41 11 22Z" fill="#6dbb4a"/>
+  <path d="M20 24 Q38 14 54 17 Q72 22 81 36 Q76 50 63 57 Q46 62 27 60 Q30 74 46 84" fill="none" stroke="#e3c98a" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M27 60 Q20 42 20 24 M63 57 Q56 72 46 84" fill="none" stroke="#e3c98a" stroke-width="3" stroke-linecap="round"/>
+  <g fill="#3f8f3a"><circle cx="38" cy="34" r="4"/><circle cx="43" cy="38" r="3.4"/><circle cx="70" cy="76" r="3.6"/><circle cx="14" cy="44" r="3.2"/><circle cx="84" cy="54" r="3"/><circle cx="48" cy="45" r="3"/></g>
+</svg>`;
+let selPlot = null, shopMsg = '';
 function mineStock() {
   const l = SV.b.mine; if (!l) return 0;
   return Math.floor(Math.min(l*240, l*8*(Date.now()-SV.mineT)/60000));
 }
 const $ = id => document.getElementById(id);
+const costTxt = c => `🪙${c[0]}${c[1] ? ' ⚪' + c[1] : ''}`;
+const canPay = c => SV.gold >= c[0] && SV.pearls >= c[1];
+function resHtml() { return `<span class="pill">🪙 ${SV.gold}</span><span class="pill">⚪ ${SV.pearls}</span><span class="pill">💎 ${SV.diamonds}</span>`; }
 function renderDorp() {
-  $('rGold').textContent = '🪙 ' + SV.gold;
-  $('rPearl').textContent = '⚪ ' + SV.pearls;
-  let h = '';
-  for (const k in BLD) {
-    const b = BLD[k], l = SV.b[k], c = b.c[l];
-    let btn;
-    if (!c) btn = `<button class="off" disabled>MAX</button>`;
-    else {
-      const ok = SV.gold >= c[0] && SV.pearls >= c[1];
-      btn = `<button class="${ok?'':'off'}" data-act="up" data-k="${k}">${l?'Upgrade':'Bouw'}<br>🪙${c[0]}${c[1]?' ⚪'+c[1]:''}</button>`;
-    }
-    let extra = '';
-    if (k === 'mine' && l) { const st = mineStock(); extra = ` <button class="gold" data-act="collect" style="min-width:0;min-height:36px;margin-top:4px">Innen 🪙${st}</button>`; }
-    h += `<div class="card"><div class="ico">${b.i}</div><div class="txt"><b>${b.n}</b> <small style="display:inline">niv. ${l}</small><small>${b.d(l)}</small>${extra}</div>${btn}</div>`;
+  $('res').innerHTML = resHtml();
+  let h = MAPSVG;
+  PLOTS.forEach((p, i) => {
+    const k = SV.plots[i], sel = selPlot === i ? ' sel' : '';
+    if (k) h += `<button class="plot built${sel}" data-act="plot" data-i="${i}" style="left:${p[0]}%;top:${p[1]}%" aria-label="${BLD[k].n}">${BLD[k].i}<span class="lv">${SV.b[k]}</span><span class="nm">${BLD[k].n}</span>${k === 'mine' && mineStock() > 0 ? '<span class="bub">🪙</span>' : ''}</button>`;
+    else h += `<button class="plot empty${sel}" data-act="plot" data-i="${i}" style="left:${p[0]}%;top:${p[1]}%" aria-label="Lege bouwplaats">＋</button>`;
+  });
+  $('map').innerHTML = h;
+  let s = '';
+  if (selPlot === null) s = `<div class="hint">Tik op een bouwplaats <b>＋</b> om te bouwen, of op een gebouw om het te verbeteren.</div>`;
+  else if (SV.plots[selPlot]) {
+    const k = SV.plots[selPlot], b = BLD[k], l = SV.b[k], c = b.c[l];
+    s = `<div class="row"><div class="ico">${b.i}</div><div class="txt"><b>${b.n}</b> · niveau ${l}<small>${b.d(l)}</small>${c ? `<small>Volgend niveau: ${b.d(l+1)}</small>` : ''}</div>` +
+        (c ? `<button class="${canPay(c) ? '' : 'off'}" data-act="up" data-k="${k}">Upgrade<br>${costTxt(c)}</button>` : `<button class="off" disabled>MAX</button>`) + `</div>`;
+    if (k === 'mine') s += `<button class="gold" data-act="collect">Goud innen: 🪙 ${mineStock()}</button>`;
+  } else {
+    const free = Object.keys(BLD).filter(k => !SV.plots.includes(k));
+    if (!free.length) s = `<div class="hint">Alle gebouwen staan al. Deze plek blijft vrij.</div>`;
+    for (const k of free) { const b = BLD[k], c = b.c[0];
+      s += `<div class="row"><div class="ico">${b.i}</div><div class="txt"><b>${b.n}</b><small>${b.d(0)}</small></div><button class="${canPay(c) ? '' : 'off'}" data-act="build" data-k="${k}">Bouw hier<br>${costTxt(c)}</button></div>`; }
   }
-  $('list').innerHTML = h;
+  $('sheet').innerHTML = s;
   $('playBtn').textContent = '▶ Expeditie ' + SV.sel;
+  $('endBtn').innerHTML = '∞ Oneindig' + (SV.best ? `<br>record ${SV.best} m` : '');
   $('muteBtn').textContent = SV.mute ? '🔇' : '🔊';
 }
 function show(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === id); }
 function goDorp() { G.mode = 'dorp'; renderDorp(); show('dorp'); }
 
+/* ===================== Winkel & diamanten ===================== */
+// Betaaladapter. ECHTE betalingen zijn NIET gekoppeld: vervang PAY.buy door Play Billing / StoreKit / Stripe
+// met bonverificatie op een server. Alleen met ?dev=1 worden aankopen gesimuleerd om de winkel te testen.
+const PAY = { buy(pack) { return DEV ? Promise.resolve(pack) : Promise.reject(new Error('Betalen is nog niet gekoppeld. Er is niets afgeschreven.')); } };
+const PACKS = [ { id:'d80', n:'Handje diamanten', q:80, price:'€ 0,99' }, { id:'d500', n:'Zak diamanten', q:500, price:'€ 4,99' }, { id:'d1200', n:'Kist diamanten', q:1200, price:'€ 9,99' } ];
+const DEALS = [ { id:'g1', n:'Buidel goud', i:'🪙', d:'400 goud', cost:10, give:() => SV.gold += 400 },
+                { id:'g2', n:'Schatkist', i:'🧰', d:'2000 goud', cost:40, give:() => SV.gold += 2000 },
+                { id:'p1', n:'Parelsnoer', i:'⚪', d:'5 parels', cost:15, give:() => SV.pearls += 5 } ];
+const REVIVE = 5;
+function renderShop() {
+  $('res2').innerHTML = resHtml();
+  let h = `<h3>Besteed diamanten</h3>`;
+  for (const d of DEALS) h += `<div class="card row"><div class="ico">${d.i}</div><div class="txt"><b>${d.n}</b><small>${d.d}</small></div><button class="${SV.diamonds >= d.cost ? 'gem' : 'off'}" data-act="spend" data-id="${d.id}">💎 ${d.cost}</button></div>`;
+  h += `<div class="card row"><div class="ico">💖</div><div class="txt"><b>Tweede kans</b><small>Na een verloren expeditie verdergaan. Eén keer per expeditie, te kiezen op het eindscherm.</small></div><button class="off" disabled>💎 ${REVIVE}</button></div>`;
+  h += `<h3>Diamanten kopen</h3><div class="note">${DEV ? 'TESTMODUS: aankopen worden gesimuleerd, er wordt niets betaald.' : 'Betalen met echt geld is nog niet actief. Je verdient 💎 1 voor elke expeditie die je voor het eerst haalt.'}${shopMsg ? '<br><b>' + shopMsg + '</b>' : ''}</div>`;
+  for (const p of PACKS) h += `<div class="card row"><div class="ico">💎</div><div class="txt"><b>${p.n}</b><small>${p.q} diamanten</small></div><button class="gold" data-act="buy" data-id="${p.id}">${p.price}</button></div>`;
+  $('shopList').innerHTML = h;
+}
+
 document.addEventListener('click', e => {
   const t = e.target.closest('[data-act]'); if (!t) return;
   audioInit();
-  const a = t.dataset.act;
-  if (a === 'up') {
-    const k = t.dataset.k, c = BLD[k].c[SV.b[k]];
-    if (c && SV.gold >= c[0] && SV.pearls >= c[1]) {
+  const a = t.dataset.act, k = t.dataset.k;
+  if (a === 'plot') { const i = +t.dataset.i; selPlot = selPlot === i ? null : i; renderDorp(); }
+  else if (a === 'build') {
+    const c = BLD[k].c[0];
+    if (selPlot !== null && !SV.plots[selPlot] && !SV.plots.includes(k) && canPay(c)) {
+      SV.gold -= c[0]; SV.pearls -= c[1]; SV.b[k] = 1; SV.plots[selPlot] = k; if (k === 'mine') SV.mineT = Date.now(); sfx('up'); save();
+    } else sfx('no');
+    renderDorp();
+  } else if (a === 'up') {
+    const c = BLD[k].c[SV.b[k]];
+    if (c && canPay(c)) {
       if (k === 'mine') { SV.gold += mineStock(); SV.mineT = Date.now(); }
       SV.gold -= c[0]; SV.pearls -= c[1]; SV.b[k]++; sfx('up'); save();
     } else sfx('no');
@@ -142,10 +228,22 @@ document.addEventListener('click', e => {
   else if (a === 'next') { SV.sel = Math.min(SV.max, SV.sel+1); renderDorp(); }
   else if (a === 'mute') { SV.mute = !SV.mute; save(); renderDorp(); }
   else if (a === 'play') start(SV.sel);
+  else if (a === 'endless') start(0);
   else if (a === 'home') goDorp();
-  else if (a === 'again') start(G.mode === 'win' ? Math.min(SV.max, G.n+1) : G.n);
+  else if (a === 'again') start(G.n === 0 ? 0 : G.mode === 'win' ? SV.sel : G.n);
+  else if (a === 'revive') revive();
+  else if (a === 'shop') { shopMsg = ''; G.mode = 'dorp'; renderShop(); show('winkel'); }
+  else if (a === 'spend') {
+    const d = DEALS.find(d => d.id === t.dataset.id);
+    if (d && SV.diamonds >= d.cost) { SV.diamonds -= d.cost; d.give(); sfx('up'); save(); } else sfx('no');
+    renderShop();
+  } else if (a === 'buy') {
+    const p = PACKS.find(p => p.id === t.dataset.id);
+    PAY.buy(p).then(() => { SV.diamonds += p.q; save(); sfx('pearl'); shopMsg = `+${p.q} diamanten`; renderShop(); })
+              .catch(err => { sfx('no'); shopMsg = err.message; renderShop(); });
+  }
 });
-setInterval(() => { if (G.mode === 'dorp' && SV.b.mine) renderDorp(); }, 5000);
+setInterval(() => { if (G.mode === 'dorp' && SV.b.mine && $('dorp').classList.contains('on')) renderDorp(); }, 5000);
 
 /* ===================== Geluid ===================== */
 let AC = null;
@@ -161,93 +259,117 @@ function tone(f, d, type, v, slide) {
 function sfx(n) {
   if (n === 'jump') tone(380, .12, 'square', .04, 620);
   else if (n === 'jump2') tone(520, .12, 'square', .04, 840);
+  else if (n === 'duck') tone(300, .1, 'triangle', .05, 150);
   else if (n === 'coin') tone(1250, .07, 'triangle', .07, 1700);
   else if (n === 'pearl') { tone(900, .12, 'sine', .09, 1400); setTimeout(() => tone(1400, .2, 'sine', .09, 2000), 90); }
-  else if (n === 'stomp') tone(240, .12, 'sawtooth', .06, 90);
+  else if (n === 'stomp') { tone(240, .12, 'sawtooth', .06, 90); setTimeout(() => tone(1250, .07, 'triangle', .07, 1700), 70); }
   else if (n === 'hurt') tone(180, .25, 'sawtooth', .08, 60);
   else if (n === 'up') { tone(520, .1, 'triangle', .08); setTimeout(() => tone(780, .18, 'triangle', .08), 100); }
   else if (n === 'no') tone(140, .12, 'square', .05);
   else if (n === 'bell') { tone(660, .9, 'sine', .12); tone(990, .9, 'sine', .05); setTimeout(() => { tone(660, 1.1, 'sine', .12); tone(990, 1.1, 'sine', .05); }, 380); }
 }
 
-/* ===================== Levelgenerator (deterministisch per level) ===================== */
+/* ===================== Levelgenerator ===================== */
+// n >= 1: vast level (deterministisch per nummer). n === 0: oneindig, wordt onderweg bijgebouwd.
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
-const PW = 26, PH = 40;
+const PW = 26, PH = 40, DH = 20, GW = 16, FOE_GOLD = [5, 8]; // krab, meeuw
 
-function genLevel(n) {
-  const r = rng(n*7919 + 13), D = clamp((n-1)/14, 0, 1);
-  const len = 4600 + Math.min(n, 20)*420;
-  const L = { blocks:[], plats:[], coins:[], foes:[], flagX:0 };
-  let x = -900, y = 500, pearls = 0;
-  L.blocks.push({ x, y, w:1500 }); x += 1500;
-  while (x < len) {
-    let dy, gap = 0;
+function newGen(n, seed) {
+  return { n, r:rng(n ? n*7919 + 13 : (seed || Date.now())), x:600, y:500, pearls:0, nextPearl:2500, done:false,
+    len:n ? 4600 + Math.min(n, 20)*420 : Infinity,
+    blocks:[{ x:-900, y:500, w:1500 }], plats:[], coins:[], foes:[], gates:[], flagX:Infinity, flagY:0 };
+}
+function extend(L, until) {
+  const r = L.r, n = L.n;
+  while (!L.done && L.x < until) {
+    if (L.x >= L.len) { // slotstuk met de klok
+      L.x += 80; L.y = clamp(L.y, 420, 520);
+      L.blocks.push({ x:L.x, y:L.y, w:1400 });
+      if (L.pearls === 0) L.coins.push({ x:L.x + 120, y:L.y - 120, t:1 });
+      L.flagX = L.x + 320; L.flagY = L.y; L.done = true; break;
+    }
+    const D = n ? clamp((n-1)/14, 0, 1) : clamp(L.x/26000, 0, 1);
+    let x = L.x, y = L.y, dy, gap = 0;
     if (r() < .45 + .15*D) { gap = 70 + r()*(50 + 60*D); dy = (r()*2 - 1)*40; }
     else dy = (r() < .5 ? -1 : 1)*(30 + r()*40);
-    const ny = clamp(y + dy, 400, 540);
-    if (gap) { // muntenboog over het gat
-      for (let i = 1; i <= 4; i++) { const k = i/5; L.coins.push({ x:x + gap*k, y:(y + (ny-y)*k) - 30 - Math.sin(k*Math.PI)*70, t:0 }); }
-    }
+    let ny = clamp(y + dy, 400, 540);
+    if (!gap && Math.abs(ny - y) < 24) ny = y; // geen bijna onzichtbare drempels waar je op vastloopt
+    if (gap) for (let i = 1; i <= 4; i++) { const k = i/5; L.coins.push({ x:x + gap*k, y:(y + (ny-y)*k) - 30 - Math.sin(k*Math.PI)*70, t:0 }); }
     x += gap; y = ny;
-    const w = 240 - 40*D + r()*360;
+    const w = 240 - 40*D + r()*360, roll = r(); let crab = false, gate = false;
     L.blocks.push({ x, y, w });
-    const roll = r(); let crab = false;
     if (w > 330 && roll < .3 + .35*D) { // krab
       const a = x + 140, b = x + w - 50; crab = true;
       L.foes.push({ k:0, x:a + r()*(b-a-30), y:y-22, w:30, h:22, a, b, vx:(40 + 40*D)*(r() < .5 ? -1 : 1), by:y-22, ph:r()*6 });
-    } else if (roll < .75) { // munten op de grond
+    } else if (w > 300 && roll > .72) { // sluisdeur: alleen bukkend eronderdoor
+      gate = true; const gx = x + w*.55;
+      L.gates.push({ x:gx, b:y - 24 });
+      for (let i = -1; i <= 1; i++) L.coins.push({ x:gx + GW/2 + i*26, y:y - 12, t:0 });
+    } else if (roll < .72) { // munten op de grond
       const c = 3 + Math.floor(r()*4);
       for (let i = 0; i < c && 70 + i*30 < w - 20; i++) L.coins.push({ x:x + 70 + i*30, y:y - 26, t:0 });
     }
-    if (w > 260 && r() < .4) { // zwevend plankier, soms een tweede met parel
+    if (!gate && w > 260 && r() < .4) { // zwevend plankier, soms een tweede met parel
       const pw = 90 + r()*50, px = x + 60 + r()*(w - pw - 100);
       L.plats.push({ x:px, y:y - 92, w:pw });
       for (let i = 0; i < 3; i++) L.coins.push({ x:px + pw/2 + (i-1)*26, y:y - 118, t:0 });
-      if (pearls < 3 && r() < .6 && px + pw + 110 < x + w) {
+      const pearlOk = n ? L.pearls < 3 : x > L.nextPearl;
+      if (pearlOk && r() < .6 && px + pw + 110 < x + w) {
         L.plats.push({ x:px + pw + 30, y:y - 178, w:70 });
-        L.coins.push({ x:px + pw + 65, y:y - 206, t:1 }); pearls++;
+        L.coins.push({ x:px + pw + 65, y:y - 206, t:1 }); L.pearls++; L.nextPearl = x + 3500;
       }
-    } else if (n >= 3 && !crab && w > 340 && r() < .15 + .3*D) { // meeuw (nooit boven een krab of de landingszone)
+    } else if ((n ? n >= 3 : x > 3000) && !crab && !gate && w > 340 && r() < .15 + .3*D) { // meeuw (nooit boven krab of landingszone)
       L.foes.push({ k:1, x:x + w*.6, y:y-100, w:30, h:16, a:x + 170, b:x + w - 30, vx:-(30 + 40*D), by:y - 100, ph:r()*6 });
     }
-    x += w;
+    L.x = x + w; L.y = y;
   }
-  const gap = 80; x += gap; y = clamp(y, 420, 520);
-  L.blocks.push({ x, y, w:1400 });
-  if (pearls === 0) L.coins.push({ x:x + 120, y:y - 120, t:1 });
-  L.flagX = x + 320; L.flagY = y;
-  return L;
 }
+function genLevel(n) { const L = newGen(n); extend(L, Infinity); return L; }
 
 /* ===================== Spel ===================== */
 const STEP = 1/120, GRAV = 2000, JUMP = 660, JUMP2 = 600;
-const G = { mode:'dorp', n:1, t:0, bgX:0, parts:[] };
-let held = false;
+const G = { mode:'dorp', n:1, t:0, bgX:0, parts:[], pops:[] };
+let held = false, wantDuck = false;
 
-function start(n) {
-  const L = genLevel(n);
-  Object.assign(G, L, {
-    mode:'play', n, t:0, gold:0, pearls:0, parts:[],
+function start(n, seed) {
+  const L = newGen(n, seed); extend(L, n ? Infinity : 3000);
+  Object.assign(G, {
+    L, blocks:L.blocks, plats:L.plats, coins:L.coins, foes:L.foes, gates:L.gates, flagX:L.flagX, flagY:L.flagY,
+    mode:'play', n, t:0, gold:0, pearls:0, parts:[], pops:[], revived:false, banked:null, pruneT:0,
     hearts:3 + SV.b.inn, maxAir:1 + SV.b.shop, magnet:MAGNET[SV.b.light],
-    speed:220 + 5*Math.min(n, 16),
-    p:{ x:0, y:500 - PH, vy:0, ground:true, coy:0, buf:0, air:0, inv:0, stall:0 },
+    speed:n ? 220 + 5*Math.min(n, 16) : 220, fK:.93 - .04*SV.b.dike, fMax:400 + 50*SV.b.dike,
+    p:{ x:0, y:500 - PH, vy:0, ground:true, coy:0, buf:0, air:0, inv:0, stall:0, duck:false, duckT:0, jT:-9, jAir:false, gateStall:false },
   });
-  G.fSpeed = G.speed*(.93 - .04*SV.b.dike);
-  G.fMax = 400 + 50*SV.b.dike;
   G.floodX = -G.fMax; G.p.air = G.maxAir;
-  held = false; show('none');
+  held = false; wantDuck = false; show('none');
 }
-function press() { if (G.mode === 'play') { G.p.buf = .13; held = true; } }
+function press() { if (G.mode === 'play') { G.p.buf = .13; held = true; wantDuck = false; } }
 function release() { held = false; if (G.mode === 'play' && G.p.vy < -200) G.p.vy *= .45; }
+function duckOn() {
+  if (G.mode !== 'play' || wantDuck) return;
+  const p = G.p; wantDuck = true; held = false; p.duckT = .28; p.buf = 0;
+  // de tik waarmee de veeg begon gaf al een sprong: die draaien we terug
+  if (G.t - p.jT < .22 && p.vy < 0) { if (p.jAir) p.air = Math.min(G.maxAir, p.air + 1); p.vy = 900; p.jT = -9; }
+  else if (!p.ground) p.vy = Math.max(p.vy, 700); // in de lucht: snel omlaag
+  sfx('duck');
+}
+function duckOff() { wantDuck = false; }
+const underGate = p => G.gates.some(g => p.x + PW > g.x && p.x < g.x + GW);
 
 function burst(x, y, col, c) { for (let i = 0; i < c; i++) G.parts.push({ x, y, vx:(Math.random()-.5)*260, vy:-Math.random()*260, l:.5, col }); }
+function pop(x, y, txt) { G.pops.push({ x, y, txt, l:1 }); }
+function respawn() {
+  const p = G.p, b = G.blocks.find(b => b.x + b.w > p.x + PW + 40) || G.blocks[G.blocks.length-1];
+  p.x = Math.max(b.x + 12, p.x); p.y = b.y - PH; p.vy = 0; p.ground = true; p.air = G.maxAir;
+}
 function hurt() {
   const p = G.p; if (p.inv > 0) return;
   G.hearts--; p.inv = 1.4; sfx('hurt'); if (navigator.vibrate) navigator.vibrate(60);
   burst(p.x + PW/2, p.y + PH/2, '#e03131', 10);
   if (G.hearts <= 0) end(false, 'Je levens zijn op.');
 }
+const meters = () => Math.max(0, Math.floor(G.p.x/10));
 function end(win, why) {
   if (G.mode !== 'play') return;
   G.mode = win ? 'win' : 'lose';
@@ -255,32 +377,62 @@ function end(win, why) {
   if (win) {
     const bonus = 20 + 5*G.n, first = G.n === SV.max;
     SV.gold += G.gold + bonus; SV.pearls += G.pearls + (first ? 1 : 0);
-    if (first) { SV.max++; } SV.sel = Math.min(SV.max, G.n + 1);
+    if (first) { SV.max++; SV.diamonds++; } SV.sel = Math.min(SV.max, G.n + 1);
     sfx('bell');
-    txt = `Het dorp is gewaarschuwd!<br>🪙 ${G.gold} + ${bonus} bonus &nbsp; ⚪ ${G.pearls}${first ? ' + 1 (eerste keer)' : ''}`;
+    txt = `Het dorp is gewaarschuwd!<br>🪙 ${G.gold} + ${bonus} bonus &nbsp; ⚪ ${G.pearls}${first ? ' + 1 &nbsp; 💎 + 1 (eerste keer)' : ''}`;
     $('eTitle').textContent = '🔔 Klok geluid!'; $('eBtn').textContent = '▶ Expeditie ' + SV.sel;
+  } else if (G.n === 0) { // oneindig: alles wat je pakte is van jou
+    const m = meters(), rec = m > SV.best; if (rec) SV.best = m;
+    G.banked = { gold:G.gold, pearls:G.pearls }; SV.gold += G.gold; SV.pearls += G.pearls;
+    txt = `${why}<br><b>${m} m</b>${rec ? ' — nieuw record!' : ` (record ${SV.best} m)`}<br>🪙 ${G.gold} &nbsp; ⚪ ${G.pearls}`;
+    $('eTitle').textContent = '🌊 Einde van de tocht'; $('eBtn').textContent = '↻ Opnieuw';
   } else {
-    const keep = Math.floor(G.gold/2); SV.gold += keep;
+    const keep = Math.floor(G.gold/2); G.banked = { gold:keep, pearls:0 }; SV.gold += keep;
     txt = `${why}<br>Je redt de helft van je buit: 🪙 ${keep}. Parels zijn verloren.`;
     $('eTitle').textContent = '🌊 Verzwolgen'; $('eBtn').textContent = '↻ Opnieuw';
   }
+  const rb = $('revBtn'), canRev = !win && !G.revived;
+  rb.hidden = !canRev; rb.style.display = canRev ? '' : 'none';
+  rb.className = SV.diamonds >= REVIVE ? 'gem' : 'off'; rb.textContent = `💖 Doorgaan 💎${REVIVE}`;
   save(); $('eText').innerHTML = txt; show('eind');
+}
+function revive() {
+  if (G.mode !== 'lose' || G.revived || SV.diamonds < REVIVE) { sfx('no'); return; }
+  SV.diamonds -= REVIVE; SV.gold -= G.banked.gold; SV.pearls -= G.banked.pearls; G.banked = null; save();
+  const p = G.p; G.revived = true; G.hearts = 2; G.mode = 'play';
+  if (p.y > 600) respawn();
+  p.inv = 2.5; p.stall = 0; G.floodX = p.x - G.fMax; held = false; wantDuck = false; sfx('up'); show('none');
 }
 
 function step() {
   const p = G.p, dt = STEP; G.t += dt;
+  if (G.n === 0) { // oneindig: bijbouwen, opruimen, versnellen
+    G.speed = 220 + Math.min(110, p.x/260);
+    if (G.L.x < p.x + 2500) extend(G.L, p.x + 4000);
+    if ((G.pruneT -= dt) <= 0) { G.pruneT = 1; const cut = p.x - 1500;
+      for (const k of ['blocks', 'plats', 'coins', 'foes', 'gates']) { const a = G[k]; let i = 0; while (i < a.length && a[i].x + (a[i].w || 0) < cut) i++; if (i) a.splice(0, i); } }
+  }
+  const gateHere = underGate(p);
   // springen
   if (p.buf > 0) {
     p.buf -= dt;
-    if (p.ground || p.coy > 0) { p.vy = -JUMP; p.ground = false; p.coy = 0; p.buf = 0; sfx('jump'); }
-    else if (p.air > 0) { p.vy = -JUMP2; p.air--; p.buf = 0; sfx('jump2'); burst(p.x + PW/2, p.y + PH, '#fff', 5); }
+    if (!gateHere) {
+      if (p.ground || p.coy > 0) { p.vy = -JUMP; p.ground = false; p.coy = 0; p.buf = 0; p.jT = G.t; p.jAir = false; sfx('jump'); }
+      else if (p.air > 0) { p.vy = -JUMP2; p.air--; p.buf = 0; p.jT = G.t; p.jAir = true; sfx('jump2'); burst(p.x + PW/2, p.y + PH, '#fff', 5); }
+    }
   }
-  p.coy -= dt; if (p.inv > 0) p.inv -= dt;
-  // horizontaal: muren houden je tegen (en de vloed haalt je in)
-  let nx = p.x + G.speed*dt, stalled = false;
+  p.coy -= dt; p.duckT -= dt; if (p.inv > 0) p.inv -= dt;
+  p.duck = wantDuck || p.duckT > 0 || (p.duck && gateHere); // onder een sluisdeur kun je niet rechtop
+  const top = p.y + (p.duck ? PH - DH : 0);
+  // horizontaal: muren en sluisdeuren houden je tegen (en de vloed haalt je in)
+  let nx = p.x + G.speed*dt, stalled = false; p.gateStall = false;
   for (const b of G.blocks) {
     if (b.x > nx + PW) break;
     if (p.y + PH > b.y + 1 && p.x + PW <= b.x + .5 && nx + PW > b.x) { nx = b.x - PW; stalled = true; }
+  }
+  for (const g of G.gates) {
+    if (g.x > nx + PW) break;
+    if (top < g.b && p.x + PW <= g.x + .5 && nx + PW > g.x) { nx = g.x - PW; stalled = true; p.gateStall = true; }
   }
   p.x = nx; p.stall = stalled ? p.stall + dt : 0;
   // verticaal
@@ -295,12 +447,7 @@ function step() {
   if (landed) { p.vy = 0; p.ground = true; p.air = G.maxAir; }
   else { if (p.ground) p.coy = .09; p.ground = false; }
   // in het water gevallen
-  if (p.y > 640) {
-    hurt(); if (G.mode !== 'play') return;
-    p.inv = Math.max(p.inv, 1.4);
-    const b = G.blocks.find(b => b.x + b.w > p.x + PW + 40) || G.blocks[G.blocks.length-1];
-    p.x = Math.max(b.x + 12, p.x); p.y = b.y - PH; p.vy = 0; p.ground = true; p.air = G.maxAir;
-  }
+  if (p.y > 640) { hurt(); if (G.mode !== 'play') return; p.inv = Math.max(p.inv, 1.4); respawn(); }
   // munten & parels
   for (let i = G.coins.length-1; i >= 0; i--) {
     const c = G.coins[i], dx = p.x + PW/2 - c.x, dy = p.y + PH/2 - c.y, d2 = dx*dx + dy*dy;
@@ -310,24 +457,26 @@ function step() {
       G.coins.splice(i, 1);
     }
   }
-  // vijanden
+  // vijanden: erop springen levert munten op
   for (const f of G.foes) {
     if (f.dead) continue;
     f.x += f.vx*dt; if (f.x < f.a) { f.x = f.a; f.vx = -f.vx; } else if (f.x + f.w > f.b) { f.x = f.b - f.w; f.vx = -f.vx; }
     if (f.k === 1) f.y = f.by + Math.sin(G.t*3 + f.ph)*16;
-    if (p.x + PW > f.x + 3 && p.x < f.x + f.w - 3 && p.y + PH > f.y + 2 && p.y < f.y + f.h) {
+    if (p.x + PW > f.x + 3 && p.x < f.x + f.w - 3 && p.y + PH > f.y + 2 && top < f.y + f.h) {
       if (p.vy > 0 && p.y + PH - p.vy*dt <= f.y + 12) {
-        f.dead = true; p.vy = -460; p.air = G.maxAir; p.ground = false; G.gold += 5;
-        sfx('stomp'); burst(f.x + f.w/2, f.y, f.k ? '#fff' : '#ff6b6b', 12);
+        const v = FOE_GOLD[f.k];
+        f.dead = true; p.vy = -460; p.air = G.maxAir; p.ground = false; G.gold += v;
+        sfx('stomp'); burst(f.x + f.w/2, f.y, '#ffd43b', 14); pop(f.x + f.w/2, f.y - 8, '+' + v + ' 🪙');
       } else hurt();
     }
   }
   if (G.mode !== 'play') return;
   // de vloed
-  G.floodX = Math.max(G.floodX + G.fSpeed*dt, p.x - G.fMax);
+  G.floodX = Math.max(G.floodX + G.speed*G.fK*dt, p.x - G.fMax);
   if (G.floodX > p.x + PW*.6) return end(false, 'De vloed heeft je ingehaald.');
   if (p.x > G.flagX) return end(true);
   for (let i = G.parts.length-1; i >= 0; i--) { const q = G.parts[i]; q.l -= dt; q.vy += 900*dt; q.x += q.vx*dt; q.y += q.vy*dt; if (q.l <= 0) G.parts.splice(i, 1); }
+  for (let i = G.pops.length-1; i >= 0; i--) { const q = G.pops[i]; q.l -= dt; q.y -= 45*dt; if (q.l <= 0) G.pops.splice(i, 1); }
 }
 
 /* ===================== Tekenen ===================== */
@@ -340,22 +489,24 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 
+// Dezelfde munt (🪙) en parel (⚪) als in het dorp en de winkel, één keer voorgetekend.
+function sprite(ch) { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); x.font = '48px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(ch, 32, 35); return c; }
+const SPR = { coin:sprite('🪙'), pearl:sprite('⚪') };
+
 const SKY = [['#8fd3ff','#e8f7ff'], ['#ffb37a','#ffe9c9'], ['#6fa8dc','#d9ecff'], ['#5b5fa8','#f3b6a0']];
 function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
 
 function drawBg(cam) {
-  const pal = SKY[(G.n-1) % SKY.length], g = ctx.createLinearGradient(0, 0, 0, H);
+  const pal = SKY[(Math.max(1, G.n)-1) % SKY.length], g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, pal[0]); g.addColorStop(.75, pal[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#fff8'; ctx.beginPath(); ctx.arc(W*.78, OY + 190, 34, 0, 7); ctx.fill();
   ctx.fillStyle = '#fffc';
   for (let i = 0; i < 6; i++) { const x = ((i*310 - cam*.08) % (W + 300) + W + 300) % (W + 300) - 150, y = OY + 150 + (i*53 % 120); rr(x, y, 90, 22, 11); ctx.fill(); rr(x + 22, y - 12, 46, 22, 11); ctx.fill(); }
-  // verre heuvels
   ctx.fillStyle = '#7fbf7f'; ctx.beginPath(); ctx.moveTo(0, H);
   for (let x = 0; x <= W + 16; x += 16) { const wx = x + cam*.2; ctx.lineTo(x, OY + 440 + Math.sin(wx*.006)*26 + Math.sin(wx*.017)*10); }
   ctx.lineTo(W, H); ctx.fill();
-  // molens
   const sp = 520, off = cam*.35, i0 = Math.floor(off/sp);
-  for (let i = i0; i <= i0 + Math.ceil(W/sp) + 1; i++) {
+  for (let i = i0; i <= i0 + Math.ceil(W/sp) + 1; i++) { // molens
     const x = i*sp - off + 120, y = OY + 455;
     ctx.fillStyle = '#6b4f3a'; ctx.beginPath(); ctx.moveTo(x - 14, y); ctx.lineTo(x - 8, y - 60); ctx.lineTo(x + 8, y - 60); ctx.lineTo(x + 14, y); ctx.fill();
     ctx.save(); ctx.translate(x, y - 58); ctx.rotate(G.t*.8 + i); ctx.fillStyle = '#f4ead5';
@@ -366,13 +517,21 @@ function drawBg(cam) {
   for (let x = 0; x <= W + 16; x += 16) { const wx = x + cam*.35; ctx.lineTo(x, OY + 470 + Math.sin(wx*.009 + 2)*16); }
   ctx.lineTo(W, H); ctx.fill();
 }
-function drawWater(cam) { // water in de gaten
+function drawWater(cam) {
   ctx.fillStyle = '#2b7fc4'; ctx.beginPath(); ctx.moveTo(0, H);
   for (let x = 0; x <= W + 12; x += 12) ctx.lineTo(x, OY + 585 + Math.sin((x + cam)*.03 + G.t*2.5)*5);
   ctx.lineTo(W, H); ctx.fill();
 }
 function drawHero(x, y, p) {
   if (p.inv > 0 && Math.floor(G.t*14) % 2) return;
+  if (p.duck) { // gebukt: plat tegen de grond
+    ctx.fillStyle = '#28435e'; ctx.fillRect(x - 2, y + 34, 8, 6);
+    ctx.fillStyle = '#ffc928'; rr(x, y + 24, 22, 16, 6); ctx.fill();
+    ctx.fillStyle = '#f3c9a5'; rr(x + 14, y + 23, 15, 12, 5); ctx.fill();
+    ctx.fillStyle = '#e0a800'; rr(x + 11, y + 20, 21, 6, 3); ctx.fill();
+    ctx.fillStyle = '#10263b'; ctx.fillRect(x + 24, y + 28, 3, 3);
+    return;
+  }
   const run = p.ground ? Math.sin(G.t*18) : .6;
   ctx.fillStyle = '#28435e'; ctx.fillRect(x + 5 + run*4, y + 31, 6, 9); ctx.fillRect(x + 15 - run*4, y + 31, 6, 9);
   ctx.fillStyle = '#ffc928'; rr(x + 1, y + 13, 24, 21, 6); ctx.fill();
@@ -414,53 +573,73 @@ function drawWorld(cam) {
     ctx.fillStyle = '#b0793f'; rr(x, s.y + OY, s.w, 12, 3); ctx.fill();
     ctx.fillStyle = '#8a5a2b'; ctx.fillRect(x + 3, s.y + OY + 8, s.w - 6, 3);
   }
-  // klokkentoren (finish)
-  const fx = G.flagX - cam + 30, fy = G.flagY + OY;
-  if (fx < W + 80) {
-    ctx.fillStyle = '#8d6e63'; ctx.fillRect(fx - 4, fy - 130, 8, 130); ctx.fillRect(fx + 44, fy - 130, 8, 130); ctx.fillRect(fx - 12, fy - 138, 72, 10);
-    ctx.fillStyle = '#c62828'; ctx.beginPath(); ctx.moveTo(fx - 16, fy - 138); ctx.lineTo(fx + 24, fy - 168); ctx.lineTo(fx + 64, fy - 138); ctx.fill();
-    ctx.save(); ctx.translate(fx + 24, fy - 126); ctx.rotate(Math.sin(G.t*5)*(G.mode === 'win' ? .5 : .08));
-    ctx.fillStyle = '#f2a900'; ctx.beginPath(); ctx.moveTo(-14, 30); ctx.quadraticCurveTo(-12, 0, 0, 0); ctx.quadraticCurveTo(12, 0, 14, 30); ctx.fill(); ctx.beginPath(); ctx.arc(0, 33, 4, 0, 7); ctx.fill();
-    ctx.restore();
+  for (const g of G.gates) { // sluisdeur die uit de lucht hangt
+    const x = g.x - cam; if (x > W || x + GW < 0) continue; const b = g.b + OY;
+    ctx.fillStyle = '#55657a'; ctx.fillRect(x + GW/2 - 1.5, 0, 3, b - 150);
+    ctx.fillStyle = '#8a5a2b'; rr(x, b - 150, GW, 150, 3); ctx.fill();
+    ctx.fillStyle = '#6b4320'; for (let y = b - 138; y < b - 20; y += 22) ctx.fillRect(x, y, GW, 3);
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#fff' : '#e03131'; ctx.fillRect(x + i*GW/4, b - 12, GW/4, 12); }
+  }
+  if (G.flagX < Infinity) { // klokkentoren (finish)
+    const fx = G.flagX - cam + 30, fy = G.flagY + OY;
+    if (fx < W + 80) {
+      ctx.fillStyle = '#8d6e63'; ctx.fillRect(fx - 4, fy - 130, 8, 130); ctx.fillRect(fx + 44, fy - 130, 8, 130); ctx.fillRect(fx - 12, fy - 138, 72, 10);
+      ctx.fillStyle = '#c62828'; ctx.beginPath(); ctx.moveTo(fx - 16, fy - 138); ctx.lineTo(fx + 24, fy - 168); ctx.lineTo(fx + 64, fy - 138); ctx.fill();
+      ctx.save(); ctx.translate(fx + 24, fy - 126); ctx.rotate(Math.sin(G.t*5)*(G.mode === 'win' ? .5 : .08));
+      ctx.fillStyle = '#f2a900'; ctx.beginPath(); ctx.moveTo(-14, 30); ctx.quadraticCurveTo(-12, 0, 0, 0); ctx.quadraticCurveTo(12, 0, 14, 30); ctx.fill(); ctx.beginPath(); ctx.arc(0, 33, 4, 0, 7); ctx.fill();
+      ctx.restore();
+    }
   }
   for (const c of G.coins) {
     const x = c.x - cam; if (x > W + 20 || x < -20) continue; const y = c.y + OY + Math.sin(G.t*4 + c.x*.05)*3;
-    if (c.t) { ctx.fillStyle = '#ffffff55'; ctx.beginPath(); ctx.arc(x, y, 15, 0, 7); ctx.fill(); ctx.fillStyle = '#fff0f8'; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.fill(); ctx.fillStyle = '#f7b3d6'; ctx.beginPath(); ctx.arc(x + 2, y + 2, 5, 0, 7); ctx.fill(); }
-    else { ctx.fillStyle = '#e09b00'; ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fill(); ctx.fillStyle = '#ffd43b'; ctx.beginPath(); ctx.arc(x - 1, y - 1, 6, 0, 7); ctx.fill(); }
+    if (c.t) { ctx.fillStyle = '#ffffff66'; ctx.beginPath(); ctx.arc(x, y, 15, 0, 7); ctx.fill(); ctx.drawImage(SPR.pearl, x - 12, y - 12, 24, 24); }
+    else ctx.drawImage(SPR.coin, x - 11, y - 11, 22, 22);
   }
   for (const f of G.foes) if (!f.dead && f.x - cam < W + 40 && f.x - cam > -40) drawFoe(f, cam);
   drawHero(G.p.x - cam, G.p.y + OY, G.p);
-  for (const q of G.parts) { ctx.fillStyle = q.col; ctx.globalAlpha = Math.max(0, q.l*2); ctx.fillRect(q.x - cam - 2, q.y + OY - 2, 4, 4); } ctx.globalAlpha = 1;
-  // vloedgolf
-  const wx = G.floodX - cam;
+  for (const q of G.parts) { ctx.fillStyle = q.col; ctx.globalAlpha = Math.max(0, q.l*2); ctx.fillRect(q.x - cam - 2, q.y + OY - 2, 4, 4); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 17px system-ui';
+  for (const q of G.pops) { ctx.globalAlpha = Math.min(1, q.l*2); ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.strokeText(q.txt, q.x - cam, q.y + OY); ctx.fillStyle = '#8a5a00'; ctx.fillText(q.txt, q.x - cam, q.y + OY); }
+  ctx.globalAlpha = 1;
+  const wx = G.floodX - cam; // vloedgolf
   if (wx > -30) {
+    const edge = y => wx + Math.sin(y*.035 + G.t*5)*9 + Math.sin(y*.011 - G.t*2)*8;
     ctx.fillStyle = 'rgba(28,104,184,.86)'; ctx.beginPath(); ctx.moveTo(-10, 0);
-    for (let y = 0; y <= H + 14; y += 14) ctx.lineTo(wx + Math.sin(y*.035 + G.t*5)*9 + Math.sin(y*.011 - G.t*2)*8, y);
+    for (let y = 0; y <= H + 14; y += 14) ctx.lineTo(edge(y), y);
     ctx.lineTo(-10, H); ctx.fill();
     ctx.strokeStyle = '#eaf6ff'; ctx.lineWidth = 4; ctx.beginPath();
-    for (let y = 0; y <= H + 14; y += 14) ctx.lineTo(wx + Math.sin(y*.035 + G.t*5)*9 + Math.sin(y*.011 - G.t*2)*8, y);
+    for (let y = 0; y <= H + 14; y += 14) ctx.lineTo(edge(y), y);
     ctx.stroke();
   }
 }
 function drawHud() {
   const p = G.p, dist = p.x - G.floodX, danger = clamp(1 - (dist - 60)/(G.fMax - 60), 0, 1);
   if (danger > .35) { ctx.fillStyle = `rgba(28,104,184,${(danger - .35)*.9*(.7 + .3*Math.sin(G.t*10))})`; ctx.fillRect(0, 0, 14 + danger*26, H); }
-  // voortgangsbalk = de vloedklok
-  const bx = 16, bw = W - 32, by = 18, k = v => bx + clamp(v/G.flagX, 0, 1)*bw;
-  ctx.fillStyle = '#0b1c2c99'; rr(bx - 4, by - 4, bw + 8, 18, 9); ctx.fill();
-  ctx.fillStyle = '#2b7fc4'; rr(bx, by, Math.max(4, k(G.floodX) - bx), 10, 5); ctx.fill();
-  ctx.fillStyle = '#ffc928'; ctx.beginPath(); ctx.arc(k(p.x), by + 5, 7, 0, 7); ctx.fill();
-  ctx.fillStyle = '#f2a900'; ctx.font = '16px system-ui'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('🔔', bx + bw + 6, by + 5);
-  ctx.textAlign = 'left'; ctx.font = '18px system-ui'; let hs = ''; for (let i = 0; i < G.hearts; i++) hs += '❤️'; ctx.fillText(hs, 14, 52);
-  ctx.font = 'bold 18px system-ui'; ctx.textAlign = 'right'; ctx.fillStyle = '#10263b';
-  ctx.fillText(`🪙 ${G.gold}   ⚪ ${G.pearls}`, W - 14, 52);
-  ctx.textAlign = 'center'; ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#10263bcc'; ctx.fillText('Expeditie ' + G.n, W/2, 52);
-  if (G.n === 1 && G.t < 6 && G.mode === 'play') {
-    ctx.fillStyle = '#0b1c2ccc'; rr(W/2 - 170, OY + 200, 340, 58, 12); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 15px system-ui'; ctx.fillText('Tik = springen · vasthouden = hoger', W/2, OY + 220);
-    ctx.font = '14px system-ui'; ctx.fillText('Tik in de lucht = dubbelsprong · blijf de vloed voor', W/2, OY + 242);
+  const bx = 16, bw = W - 32, by = 18;
+  ctx.textBaseline = 'middle';
+  if (G.n === 0) { // oneindig: afstand i.p.v. voortgang
+    ctx.fillStyle = '#0b1c2c99'; rr(bx - 4, by - 8, bw + 8, 26, 13); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'left'; ctx.fillText('∞  ' + meters() + ' m', bx + 8, by + 5);
+    ctx.textAlign = 'right'; ctx.font = '13px system-ui'; ctx.fillText('record ' + Math.max(SV.best, meters()) + ' m', bx + bw - 8, by + 5);
+  } else { // voortgangsbalk = de vloedklok
+    const k = v => bx + clamp(v/G.flagX, 0, 1)*bw;
+    ctx.fillStyle = '#0b1c2c99'; rr(bx - 4, by - 4, bw + 8, 18, 9); ctx.fill();
+    ctx.fillStyle = '#2b7fc4'; rr(bx, by, Math.max(4, k(G.floodX) - bx), 10, 5); ctx.fill();
+    ctx.fillStyle = '#ffc928'; ctx.beginPath(); ctx.arc(k(p.x), by + 5, 7, 0, 7); ctx.fill();
+    ctx.font = '16px system-ui'; ctx.textAlign = 'right'; ctx.fillText('🔔', bx + bw + 6, by + 5);
   }
-  if (p.stall > .15 && Math.floor(G.t*6) % 2) { ctx.fillStyle = '#c92a2a'; ctx.font = 'bold 22px system-ui'; ctx.fillText('SPRING!', W/2, OY + 300); }
+  ctx.textAlign = 'left'; ctx.font = '18px system-ui'; let hs = ''; for (let i = 0; i < G.hearts; i++) hs += '❤️'; ctx.fillText(hs, 14, 54);
+  ctx.font = 'bold 18px system-ui'; ctx.textAlign = 'right'; ctx.fillStyle = '#10263b';
+  ctx.fillText(`🪙 ${G.gold}   ⚪ ${G.pearls}`, W - 14, 54);
+  ctx.textAlign = 'center';
+  if (G.n) { ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#10263bcc'; ctx.fillText('Expeditie ' + G.n, W/2, 54); }
+  if (G.n <= 1 && G.t < 7 && G.mode === 'play') {
+    ctx.fillStyle = '#0b1c2ccc'; rr(W/2 - 175, OY + 185, 350, 80, 12); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 15px system-ui'; ctx.fillText('Tik = springen · vasthouden = hoger', W/2, OY + 204);
+    ctx.fillText('Veeg omlaag = bukken onder sluisdeuren', W/2, OY + 226);
+    ctx.font = '14px system-ui'; ctx.fillText('Tik in de lucht = dubbelsprong · spring op krabben', W/2, OY + 248);
+  }
+  if (p.stall > .15 && Math.floor(G.t*6) % 2) { ctx.fillStyle = '#c92a2a'; ctx.font = 'bold 22px system-ui'; ctx.fillText(p.gateStall ? 'BUK!  ↓ veeg omlaag' : 'SPRING!', W/2, OY + 300); }
 }
 function draw() {
   ctx.setTransform(S, 0, 0, S, 0, 0);
@@ -477,13 +656,21 @@ function frame(t) {
   else { acc = 0; G.t += dt; G.bgX += dt*25; }
   draw(); requestAnimationFrame(frame);
 }
-cv.addEventListener('pointerdown', e => { e.preventDefault(); audioInit(); press(); });
-addEventListener('pointerup', release); addEventListener('pointercancel', release);
-addEventListener('keydown', e => { if ((e.code === 'Space' || e.code === 'ArrowUp') && !e.repeat) { e.preventDefault(); audioInit(); press(); } });
-addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp') release(); });
+// Eén duim: tik = springen, vasthouden = hoger, omlaag vegen (en vasthouden) = bukken.
+let pid = null, py0 = 0;
+cv.addEventListener('pointerdown', e => { e.preventDefault(); audioInit(); pid = e.pointerId; py0 = e.clientY; press(); });
+addEventListener('pointermove', e => { if (e.pointerId === pid && e.clientY - py0 > 22) duckOn(); });
+function up(e) { if (e.pointerId !== pid) return; pid = null; duckOff(); release(); }
+addEventListener('pointerup', up); addEventListener('pointercancel', up);
+addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); audioInit(); press(); }
+  else if (e.code === 'ArrowDown' || e.code === 'KeyS') { e.preventDefault(); duckOn(); }
+});
+addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp') release(); else if (e.code === 'ArrowDown' || e.code === 'KeyS') duckOff(); });
 addEventListener('contextmenu', e => e.preventDefault());
 
-window.VK = { G, get SV() { return SV; }, start, step, press, release, genLevel };
+window.VK = { G, get SV() { return SV; }, start, step, press, release, duckOn, duckOff, genLevel };
 goDorp(); requestAnimationFrame(frame);
 </script>
 </body>
