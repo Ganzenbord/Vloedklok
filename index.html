@@ -100,6 +100,7 @@
       <h1>CASTRA</h1>
       <button class="ghost" data-act="verd">🛡️ Verdediging</button>
       <button class="gem" data-act="shop" aria-label="Winkel">🛒</button>
+      <button class="gold" data-act="admin" id="admBtn" aria-label="Beheer" hidden style="display:none">🛠️</button>
       <button class="ghost" data-act="mute" id="muteBtn" aria-label="Geluid"></button>
     </div>
     <div class="res" id="res"></div>
@@ -138,6 +139,14 @@
     <div class="top"><h1>VERDEDIGING</h1><button class="ghost" data-act="home">✕ Dorp</button></div>
     <div class="res" id="res4"></div>
     <div class="list" id="defList"></div>
+  </div>
+</div>
+
+<div id="admin" class="screen" style="background:rgba(16,38,59,.6)">
+  <div class="wrap">
+    <div class="top"><h1>BEHEER</h1><button class="ghost" data-act="home">✕ Stad</button></div>
+    <div class="res" id="res5"></div>
+    <div class="list" id="admList"></div>
   </div>
 </div>
 
@@ -270,6 +279,36 @@ function renderDorp() {
   $('playBtn').innerHTML = '🏃 Veldtocht<br>' + SV.sel;
   $('endBtn').innerHTML = '∞ Oneindig' + (SV.best ? `<br>${SV.best} m` : '');
   $('muteBtn').textContent = SV.mute ? '🔇' : '🔊';
+  $('admBtn').hidden = !isAdmin(); $('admBtn').style.display = isAdmin() ? '' : 'none';
+}
+// Beheer (testmodus): alleen voor de eigenaar van de gedeelde pagina, of lokaal met ?dev=1.
+const isAdmin = () => DEV || NET.admin;
+const ADM = [
+  ['Grondstoffen', [['g1', '+10.000 goud'], ['g2', '+1.000.000 goud'], ['p', '+100 parels'], ['d', '+500 diamanten']]],
+  ['Alle gebouwen bouwen op niveau', [['l1', '1'], ['l4', '4'], ['l5', '5'], ['l9', '9'], ['l10', '10'], ['l14', '14'], ['l15', '15'], ['l20', '20']]],
+  ['Bouwen en leger', [['job', 'Bouwklus nu afmaken'], ['army', 'Leger vullen'], ['mine', 'Goudmijn vol']]],
+  ['Bekers', [['t0', '0'], ['t1', '+100'], ['t2', '+1000']]],
+  ['Veldtocht', [['lv', 'Alle 30 veldtochten vrij']]],
+  ['Opnieuw beginnen', [['reset', 'Wis alle voortgang']]],
+];
+function renderAdmin() {
+  $('res5').innerHTML = resHtml();
+  $('admList').innerHTML = `<div class="note">Testmodus. ${DEV ? 'Actief via ?dev=1.' : 'Alleen jij als eigenaar van deze pagina ziet dit.'} Wat je hier instelt telt als echte voortgang en is online zichtbaar voor andere spelers.</div>` +
+    ADM.map(([t, bs]) => `<div class="card"><b>${t}</b><div class="row" style="flex-wrap:wrap;gap:6px;margin-top:6px">${bs.map(([x, n]) => `<button class="${x === 'reset' ? 'off' : 'ghost'}" style="flex:1;min-width:64px;min-height:44px" data-act="adm" data-x="${x}">${n}</button>`).join('')}</div></div>`).join('');
+}
+function adminDo(x) {
+  if (!isAdmin()) return;
+  if (x === 'g1') SV.gold += 10000; else if (x === 'g2') SV.gold += 1000000; else if (x === 'p') SV.pearls += 100; else if (x === 'd') SV.diamonds += 500;
+  else if (x[0] === 'l' && x !== 'lv') { const L = +x.slice(1); SV.job = null;
+    for (const k in BLD) { SV.b[k] = L; if (!SV.plots.includes(k)) { const want = SV.plots.findIndex((q, i) => !q && TERR[i] === BLD[k].likes), i = want >= 0 ? want : SV.plots.indexOf(null); if (i >= 0) SV.plots[i] = k; } }
+    SV.mineT = Date.now(); }
+  else if (x === 'job') { if (SV.job) finishJob(); }
+  else if (x === 'army') { const c = armyCap(), s = unitOk('s') ? Math.floor(c/5) : 0, a = unitOk('a') ? Math.floor((c - s)/2) : 0; SV.army = { t:unitOk('t') ? c - s - a : 0, a, s }; }
+  else if (x === 'mine') SV.mineT = 0;
+  else if (x === 't0') SV.tr = 0; else if (x === 't1') SV.tr += 100; else if (x === 't2') SV.tr += 1000;
+  else if (x === 'lv') { SV.max = Math.max(SV.max, 30); SV.sel = SV.max; }
+  else if (x === 'reset') { const keep = { name:SV.name, mute:SV.mute }; SV = Object.assign(JSON.parse(JSON.stringify(DEF)), keep, { mineT:Date.now() }); selPlot = null; }
+  sfx('up'); save(); netPush(); renderAdmin();
 }
 function show(id) { for (const s of document.querySelectorAll('.screen')) s.classList.toggle('on', s.id === id); cv.style.display = GL.ok && id !== 'none' && !(id === 'eind' && (G.mode === 'win' || G.mode === 'lose')) ? 'none' : 'block'; }
 function goDorp() { G.mode = 'dorp'; moving = null; SV.sel = SV.max; show('dorp'); renderDorp(); }
@@ -317,6 +356,8 @@ document.addEventListener('click', e => {
   }
   else if (a === 'rnext') { tIdx++; renderLeger(); }
   else if (a === 'verd') openVerd();
+  else if (a === 'admin') { if (isAdmin()) { G.mode = 'dorp'; renderAdmin(); show('admin'); } }
+  else if (a === 'adm') adminDo(t.dataset.x);
   else if (a === 'dadd') { const l = +t.dataset.l; if (defOk(k) && defUsed() + DCOST[k] <= defBudget() && SV.def[l].length < 6) { SV.def[l].push(k); sfx('coin'); save(); netPush(); } else sfx('no'); renderVerd(); }
   else if (a === 'ddel') { SV.def[+t.dataset.l].splice(+t.dataset.j, 1); save(); netPush(); renderVerd(); }
   else if (a === 'raid') startRaid();
@@ -632,7 +673,7 @@ function botDef(lv, seed) { // oefendorp: vast puntenbudget, ongelijk verdeeld z
 function genRaid(lv) { return { lv, lanes:botDef(lv, 0).map(layout) }; } // voor tests
 
 /* ---- Andere spelers: gedeelde database (alleen beschikbaar via de gedeelde Claude-pagina) ---- */
-const NET = { db:null, id:null, players:[], state:'offline' };
+const NET = { db:null, id:null, players:[], state:'offline', admin:false };
 const esc = t => String(t).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
 function cleanDef(d) { // gegevens van anderen zijn niet te vertrouwen: alleen geldige opstellingen binnen het maximale budget
   if (!Array.isArray(d) || d.length !== 3) return null;
@@ -643,6 +684,7 @@ async function netInit() {
   try {
     if (!window.claude || !window.claude.use) return;
     const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+    if (user) { try { NET.admin = !!(await user.isOwner()); } catch (e) {} if (NET.admin) refresh(); }
     if (!db || !user) return;
     NET.id = await user.id(); NET.db = db; NET.state = 'online';
     await netPush(); await netPull(); await netInbox(); refresh();
@@ -671,7 +713,7 @@ async function netInbox() { // wie viel mij aan sinds de vorige keer?
   } catch (e) {}
 }
 function netAttack(target, stars) { if (NET.db && target.id) NET.db.collection('attacks').add({ to:target.id, from:NET.id, name:SV.name.slice(0, 20), stars, ts:Date.now() }).catch(() => {}); }
-function refresh() { if ($('dorp').classList.contains('on')) renderDorp(); else if ($('leger').classList.contains('on')) renderLeger(); else if ($('verd').classList.contains('on')) renderVerd(); }
+function refresh() { if ($('dorp').classList.contains('on')) renderDorp(); else if ($('leger').classList.contains('on')) renderLeger(); else if ($('verd').classList.contains('on')) renderVerd(); else if ($('admin').classList.contains('on')) renderAdmin(); }
 
 let tIdx = 0;
 function targets() { // echte spelers eerst (dichtst bij jouw bekers), daarna altijd een oefendorp
@@ -1226,7 +1268,7 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp') release(); else if (e.code === 'ArrowDown' || e.code === 'KeyS') duckOff(); });
 addEventListener('contextmenu', e => e.preventDefault());
 
-window.VK = { G, get SV() { return SV; }, start, step, press, release, duckOn, duckOff, GL, genLevel, genRaid, cost, tierOf, missing, buildSecs, tickJob, goldCap, botDef, layout, NET, curTarget, startRaid, deploy, raidStep, endRaid, get R() { return R; } };
+window.VK = { G, get SV() { return SV; }, start, step, press, release, duckOn, duckOff, GL, genLevel, genRaid, adminDo, isAdmin, cost, tierOf, missing, buildSecs, tickJob, goldCap, botDef, layout, NET, curTarget, startRaid, deploy, raidStep, endRaid, get R() { return R; } };
 initGL(); tickJob(); goDorp(); requestAnimationFrame(frame); netInit();
 </script>
 </body>
